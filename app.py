@@ -1,4 +1,5 @@
 import os
+import instructor
 from anthropic import AsyncAnthropic
 from fastapi import FastAPI, Request, Response
 from slack_sdk import WebClient
@@ -20,7 +21,6 @@ app = FastAPI()
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-BACKEND_API_KEY = os.getenv("BACKEND_API_KEY")
 
 # Initialize the Slack client
 slack_client = WebClient(token=os.getenv("SLACK_BOT_TOKEN"))
@@ -40,31 +40,69 @@ class SlackEvent(BaseModel):
     text: str
     channel: str
 
+class Analysis(BaseModel):
+    analysis: str
+
+
+# Init Anthropic client
+client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+model = "claude-3-5-haiku-latest"
+instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
+
 #### FUNCTIONS ####
 
 async def bot(query: str, user_id: str) -> Optional[str]:
     print("Sending request to server!")
-    headers = {"Authorization": f"Bearer {BACKEND_API_KEY}"}
     error_message = "Sorry, too many requests. Try again in a minute!"
 
     try:
-        response = await post_request(
-
-            'YOUR_URL', headers, {"user_input": query, "user_id": user_id}
-
-        )
-        return format_output(response)
+        response = await ping_llm(query)
+        return response 
     except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError, json.JSONDecodeError, Exception) as e:
         print(f"Error occurred: {e}")
-        return re.sub(r'<\2|\1>', error_message)
+        return error_message
 
 async def post_request(url: str, headers: dict, json_data: dict) -> httpx.Response:
     async with httpx.AsyncClient(timeout=200) as client:
         response = await client.post(url, headers=headers, json=json_data)
         response.raise_for_status()
         return response
+    
+async def ping_llm(query):
+        system = """
+        You are a customer service triage assistant. Your role is to analyze incoming messages 
+        and determine if they are customer queries related to crypto or Fordefi (a crypto wallet 
+        designed for DeFi).
 
-def format_output(response: httpx.Response, link_pattern: str) -> Optional[str]:
+        Consider a message as relevant if it:
+        - Asks questions about crypto transactions
+        - Mentions Fordefi functionality
+        - Reports issues with the wallet
+        - Requests support for DeFi operations
+
+        Your response must be a JSON file with the following structure:
+            {
+            "analysis": "[ANSWER 'YES' OR 'NO']",
+            }
+        """
+        response = await instructor_client_anthropic.messages.create(
+                temperature=0.0,
+                max_tokens=1024,
+                system=system,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": query,
+                    }
+                ],
+                model=model,
+            )
+        analysis = (response.analysis).lower().strip()
+        print(f"Analysis result: {analysis}") 
+        return analysis
+
+
+async def format_output(response: httpx.Response, link_pattern: str) -> Optional[str]:
     response_json = response.json()
     if 'output' in response_json:
         return re.sub(link_pattern, r'<\2|\1>', response_json['output'])
@@ -113,9 +151,9 @@ async def slack_events(request: Request):
         # Event handler
         response_text = await bot(user_text, user_id)
 
-        if response_text == "customer question":
+        if response_text == "yes":
 
-            response_text = f'<@Dan> {response_text}'
+            ping_cs = f'<@Dan> please take a look'
             print(response_text)
 
             # Get channel ID
@@ -124,14 +162,15 @@ async def slack_events(request: Request):
             # Send a response back to Slack in the thread where the bot was mentioned
             slack_client.chat_postMessage(
                 channel=channel,
-                text=response_text, 
+                text=ping_cs, 
                 thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
             )
-        elif response_text == "not a question":
+        elif response_text == "no":
             return Response(status_code=200)
         else:
             return Response(status_code=200)
 
     return Response(status_code=200)
 
-# Local start command: uvicorn slack_bot:app --reload --port 8800
+# Local start command: uvicorn app:app --reload --port 8800
+# ngrok http http://localhost:8800
