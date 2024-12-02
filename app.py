@@ -85,7 +85,9 @@ async def ping_llm(query):
             "analysis": "[ANSWER 'YES' OR 'NO']",
             }
         """
-        response = await instructor_client_anthropic.messages.create(
+        response = await instructor_client_anthropic.chat.completions.create(
+                model=model,
+                response_model=Analysis,
                 temperature=0.0,
                 max_tokens=1024,
                 system=system,
@@ -95,7 +97,6 @@ async def ping_llm(query):
                         "content": query,
                     }
                 ],
-                model=model,
             )
         analysis = (response.analysis).lower().strip()
         print(f"Analysis result: {analysis}") 
@@ -127,7 +128,7 @@ async def slack_events(request: Request):
     # Verify the request from Slack
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         return Response(status_code=403)
-
+    
     # Check if this is a URL verification challenge
     if body.get("type") == "url_verification":
         return {"challenge": body.get("challenge")}
