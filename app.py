@@ -158,7 +158,7 @@ async def slack_events(request: Request):
 
         if response_text == "yes":
 
-            ping_cs = f'<Dan> please take a look'
+            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
             print(response_text)
 
             # Get channel ID
