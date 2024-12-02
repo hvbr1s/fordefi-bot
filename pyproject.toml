@@ -1,0 +1,14 @@
+[project]
+name = "bot"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "anthropic>=0.40.0",
+    "fastapi>=0.115.5",
+    "httpx>=0.28.0",
+    "python-dotenv>=1.0.1",
+    "slack-sdk>=3.33.4",
+    "uvicorn>=0.32.1",
+]
