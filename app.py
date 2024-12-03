@@ -80,6 +80,7 @@ async def ping_llm(query):
         - Reports issues with the wallet
         - Requests support for DeFi operations
         - Request for help without other specifications
+        - Mentions something or some situation is urgent
 
         Your response must be a JSON file with the following structure:
             {
