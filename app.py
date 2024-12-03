@@ -70,7 +70,7 @@ async def post_request(url: str, headers: dict, json_data: dict) -> httpx.Respon
     
 async def ping_llm(query):
         system = """
-        You are a customer service triage assistant. Your role is to analyze incoming messages 
+        You are a customer service triage assistant at Fordefi. Your role is to analyze incoming messages 
         and determine if they are customer queries related to crypto or Fordefi (a crypto wallet 
         designed for DeFi).
 
@@ -81,6 +81,7 @@ async def ping_llm(query):
         - Requests support for DeFi operations
         - Request for help without other specifications
         - Mentions something or some situation is urgent
+        - Inquire about upcoming support for a blockchain, dApp or crypto asset
 
         Your response must be a JSON file with the following structure:
             {
