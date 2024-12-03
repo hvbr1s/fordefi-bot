@@ -149,6 +149,10 @@ async def slack_events(request: Request):
     if event and event.get('type'):
         # Check if the message event is from the bot itself
         if event.get('user') == bot_id:
+            print('Ignoring, SamBot talking.')
+            return Response(status_code=200)
+        elif event.get('subtype') == 'channel_join':
+            print('Ignoring, just someone joining the channel.')
             return Response(status_code=200)
 
         user_text = event.get('text')    
