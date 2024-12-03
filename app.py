@@ -79,6 +79,7 @@ async def ping_llm(query):
         - Mentions Fordefi functionality
         - Reports issues with the wallet
         - Requests support for DeFi operations
+        - Request for help without other specifications
 
         Your response must be a JSON file with the following structure:
             {
@@ -89,7 +90,7 @@ async def ping_llm(query):
                 model=model,
                 response_model=Analysis,
                 temperature=0.0,
-                max_tokens=1024,
+                max_tokens=512,
                 system=system,
                 messages=[
                     {
