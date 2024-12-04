@@ -156,7 +156,7 @@ async def slack_events(request: Request):
         elif event.get('subtype') == 'channel_join':
             print('Ignoring, just someone joining the channel.')
             return Response(status_code=200)
-        elif event.get('username') and 'Fordefi' in event.get('username'):
+        elif re.search(r'dean|fordefi|dan|poluy', event.get('username'), re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
