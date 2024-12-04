@@ -75,9 +75,10 @@ async def ping_llm(query):
         designed for DeFi).
 
         Consider a message as relevant if it:
+        - A question or request for information
         - Asks questions about crypto transactions
         - Mentions Fordefi functionality
-        - Reports issues with the wallet
+        - Reports issues with the wallet or web app on mobile or desktop
         - Requests support for DeFi operations
         - Request for help without other specifications
         - Mentions something or some situation is urgent
