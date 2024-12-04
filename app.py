@@ -1,16 +1,16 @@
+import json
 import os
-import instructor
+import re
+from typing import Optional
 from anthropic import AsyncAnthropic
+from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
+import httpx
+import instructor
+from pydantic import BaseModel
+import requests
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
-from pydantic import BaseModel
-import os
-import json
-from dotenv import load_dotenv
-import re
-import httpx
-from typing import Optional
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +21,7 @@ app = FastAPI()
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
+THENA_AUTH_TOKEN = os.getenv("THENA_AUTH_TOKEN")
 
 # Initialize the Slack client
 slack_client = WebClient(token=os.getenv("SLACK_BOT_TOKEN"))
@@ -41,7 +42,8 @@ class SlackEvent(BaseModel):
     channel: str
 
 class Analysis(BaseModel):
-    analysis: str
+    customer_query: str
+    query_summary: str
 
 
 # Init Anthropic client
@@ -70,7 +72,7 @@ async def post_request(url: str, headers: dict, json_data: dict) -> httpx.Respon
     
 async def ping_llm(query):
         system = """
-        You are a customer service triage assistant at Fordefi. Your role is to analyze incoming messages 
+        You are a customer service triage assistant. Your role is to analyze incoming messages 
         and determine if they are customer queries related to crypto or Fordefi (a crypto wallet 
         designed for DeFi).
 
@@ -81,12 +83,11 @@ async def ping_llm(query):
         - Reports issues with the wallet or web app on mobile or desktop
         - Requests support for DeFi operations
         - Request for help without other specifications
-        - Mentions something or some situation is urgent
-        - Inquire about upcoming support for a blockchain, dApp or crypto asset
 
         Your response must be a JSON file with the following structure:
             {
-            "analysis": "[ANSWER 'YES' OR 'NO']",
+            "customer_query": "[ANSWER 'YES' OR 'NO']",
+            "query_summary": "[A SHORT ONE-SENTENCE SUMMARY OF THE QUERY]"
             }
         """
         response = await instructor_client_anthropic.chat.completions.create(
@@ -102,9 +103,8 @@ async def ping_llm(query):
                     }
                 ],
             )
-        analysis = (response.analysis).lower().strip()
-        print(f"Analysis result: {analysis}") 
-        return analysis
+        print(f"Analysis result: {response.customer_query.capitalize()}") 
+        return response
 
 
 async def format_output(response: httpx.Response, link_pattern: str) -> Optional[str]:
@@ -114,6 +114,40 @@ async def format_output(response: httpx.Response, link_pattern: str) -> Optional
     else:
         print("Output key not found in JSON response")
         return None
+    
+async def thena(username, query, summary):
+    url = "https://bolt.thena.ai/rest/v2/requests"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {os.getenv('THENA_AUTH_TOKEN')}"
+    }
+
+    payload = {
+        "request": {
+            "status": "OPEN",
+            "properties": {
+                "system": {
+                    "title": summary,
+                    "description": query,
+                    "sentiment": "Neutral",
+                    "urgency":"Medium"
+                }},
+            "assignment": {
+                    "to_user_id": "6740cc1209c61cc23e36595f"
+            },
+            "created_for": {
+                "user_email": "customer@fordefi.com"
+            },
+            "private": False
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    print(f"Thena API response status: {response.status_code}")
+    print(f"Thena API response content: {response.text}") 
+
+    return response
 
 
 #### ROUTES ####
@@ -145,6 +179,7 @@ async def slack_events(request: Request):
     event_id = event.get('event_ts')
     print(event_id)
     if event_id in processed_event_ids:
+        print(f"Deplicate event {event_id}, not responding.")
         return Response(status_code=200)
     processed_event_ids.add(event_id)
     
@@ -157,21 +192,24 @@ async def slack_events(request: Request):
         elif event.get('subtype') == 'channel_join':
             print('Ignoring, just someone joining the channel.')
             return Response(status_code=200)
+        elif event.get('subtype') == 'message_deleted':
+            print('Ignoring, just someone deleting a message.')
+            return Response(status_code=200)
         elif re.search(r'dean|fordefi|dan|poluy', event.get('username'), re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
         user_text = event.get('text')    
-        user_id = event.get('user')
+        user_id = event.get('username')
         
         # Event handler
-        response_text = await bot(user_text, user_id)
+        bot_response = await bot(user_text, user_id)
+        analysis = (bot_response.customer_query).lower().strip()
+        summary = (bot_response.query_summary).capitalize().strip()
 
-        if response_text == "yes":
+        if analysis == "yes":
 
             ping_cs = f'<@U082GSCDFG9> please take a look 😊'
-            print(response_text)
-
             # Get channel ID
             channel = event.get('channel')
 
@@ -181,7 +219,15 @@ async def slack_events(request: Request):
                 text=ping_cs, 
                 thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
             )
-        elif response_text == "no":
+
+            try:
+                open_thena = await thena(username=user_id, query=user_text, summary=summary)
+                print(f"Thena API response: {open_thena}")
+            except Exception as e:
+                print(f"Error creating Thena request: {str(e)}")
+                return Response(status_code=200)
+            
+        elif analysis == "no":
             return Response(status_code=200)
         else:
             return Response(status_code=200)
