@@ -206,6 +206,9 @@ async def slack_events(request: Request):
         elif re.search(r'dean|fordefi|dan|poluy', event.get('username'), re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
+        elif not event.get('text'): 
+            print('Ignoring, empty message text or image.')
+            return Response(status_code=200)
 
         user_text = event.get('text')    
         user_id = event.get('username')
