@@ -48,7 +48,8 @@ class Analysis(BaseModel):
 
 # Init Anthropic client
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-3-5-haiku-latest"
+#model = "claude-3-5-haiku-latest" # (faster)
+model = "claude-3-5-sonnet-latest" #(smarter)
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 #### FUNCTIONS ####
@@ -84,10 +85,17 @@ async def ping_llm(query):
         - Requests support for DeFi operations
         - Request for help without other specifications
 
+        Ignore the message if it:
+        - Contains no question or support request
+        - Is just a greeting (like "hi", "hello")
+        - Is just an acknowledgment (like "thanks", "okay")
+        - Is small talk or casual conversation
+        - Is a response to another message without a new question
+
         Your response must be a JSON file with the following structure:
             {
             "customer_query": "[ANSWER 'YES' OR 'NO']",
-            "query_summary": "[A SHORT ONE-SENTENCE SUMMARY OF THE QUERY]"
+            "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]"
             }
         """
         response = await instructor_client_anthropic.chat.completions.create(
@@ -129,7 +137,7 @@ async def thena(username, query, summary):
             "properties": {
                 "system": {
                     "title": summary,
-                    "description": query,
+                    "description": f"**{username}**: '{query}'",
                     "sentiment": "Neutral",
                     "urgency":"Medium"
                 }},
