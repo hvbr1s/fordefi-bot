@@ -200,6 +200,9 @@ async def slack_events(request: Request):
         elif event.get('subtype') == 'channel_join':
             print('Ignoring, just someone joining the channel.')
             return Response(status_code=200)
+        elif event.get('subtype') == 'message_changed':
+            print('Ignoring, just someone editing a message.')
+            return Response(status_code=200)
         elif event.get('subtype') == 'message_deleted':
             print('Ignoring, just someone deleting a message.')
             return Response(status_code=200)
