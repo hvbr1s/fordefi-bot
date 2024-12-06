@@ -7,6 +7,8 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
 import httpx
 import instructor
+from collections import defaultdict
+from datetime import datetime
 from pydantic import BaseModel
 import requests
 from slack_sdk import WebClient
@@ -17,6 +19,10 @@ load_dotenv()
 
 # Initialize the FastAPI app
 app = FastAPI()
+
+# Set up message buffer
+message_buffer = defaultdict(list)
+BUFFER_TIMEOUT = 3 
 
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
@@ -138,7 +144,7 @@ async def thena(username, query, summary):
                 "system": {
                     "title": summary,
                     "description": f"**{username}**: '{query}'",
-                    "sentiment": "Neutral",
+                    "sentiment": "Neutral", # 
                     "urgency":"Medium"
                 }},
             "assignment": {
@@ -171,7 +177,7 @@ async def slack_events(request: Request):
     body_bytes = await request.body()
     body = json.loads(body_bytes)
 
-    # Verify the request from Slack
+    # Verify the request is from Slack
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         return Response(status_code=403)
     
@@ -181,7 +187,7 @@ async def slack_events(request: Request):
     
     # Parse the event
     event = body.get('event')
-    print (event)
+    print(event)
 
     # Ignore duplicate events
     event_id = event.get('event_ts')
@@ -191,9 +197,8 @@ async def slack_events(request: Request):
         return Response(status_code=200)
     processed_event_ids.add(event_id)
     
-    # Here we're basically saying that we want all types of messages to be scanned
+    # Check event conditions and ignore bot messages, join, edit, delete, etc.
     if event and event.get('type'):
-        # Check if the message event is from the bot itself
         if event.get('user') == bot_id:
             print('Ignoring, SamBot talking.')
             return Response(status_code=200)
@@ -215,38 +220,77 @@ async def slack_events(request: Request):
 
         user_text = event.get('text')    
         user_id = event.get('username')
-        
-        # Event handler
-        bot_response = await bot(user_text, user_id)
-        analysis = (bot_response.customer_query).lower().strip()
-        summary = (bot_response.query_summary).capitalize().strip()
+        timestamp = event.get('ts')
+        channel = event.get('channel')
 
-        if analysis == "yes":
+        # Buffer the message
+        message_key = f"{channel}:{user_id}"
+        message_buffer[message_key].append({
+            'text': user_text,
+            'timestamp': float(timestamp),
+            'event': event
+        })
 
-            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
-            # Get channel ID
-            channel = event.get('channel')
+        # Check if we should process the buffer
+        should_process = await should_process_messages(message_key)
 
-            # Send a response back to Slack in the thread where the bot was mentioned
-            slack_client.chat_postMessage(
-                channel=channel,
-                text=ping_cs, 
-                thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
-            )
+        if should_process:
+            # Combine messages and process
+            combined_text = " ".join([m['text'] for m in message_buffer[message_key]])
+            print(f"Combined text -> {combined_text}")
 
-            try:
-                open_thena = await thena(username=user_id, query=user_text, summary=summary)
-                print(f"Thena API response: {open_thena}")
-            except Exception as e:
-                print(f"Error creating Thena request: {str(e)}")
-                return Response(status_code=200)
+            # Process combined message once
+            bot_response = await bot(combined_text, user_id)
+            analysis = (bot_response.customer_query).lower().strip()
+            summary = (bot_response.query_summary).capitalize().strip()
+
+            if analysis == "yes":
+                ping_cs = f'<@U082GSCDFG9> please take a look 😊'
+                # Get channel ID
+                channel = event.get('channel')
+
+                # Send a response back to Slack in the thread where the bot was mentioned
+                slack_client.chat_postMessage(
+                    channel=channel,
+                    text=ping_cs, 
+                    thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
+                )
+
+                try:
+                    open_thena = await thena(username=user_id, query=combined_text, summary=summary)
+                    print(f"Thena API response: {open_thena}")
+                except Exception as e:
+                    print(f"Error creating Thena request: {str(e)}")
+                    # Even if we fail to create a Thena request, we processed this message, so clear buffer
+                    del message_buffer[message_key]
+                    return Response(status_code=200)
             
-        elif analysis == "no":
+            # Clear the message buffer after processing (whether analysis == yes or no)
+            del message_buffer[message_key]
+            print('Cleared buffer!')
+
             return Response(status_code=200)
         else:
+            # Not ready to process yet, just return and wait for more messages.
             return Response(status_code=200)
 
     return Response(status_code=200)
 
+
+async def should_process_messages(message_key) -> bool:
+    """Determine if we should process the buffered messages."""
+    if not message_buffer[message_key]:
+        return False
+    
+    earliest_msg_time = message_buffer[message_key][0]['timestamp']
+    print(f"Earlier time: {earliest_msg_time}")
+    current_time = datetime.now().timestamp()
+    print(f"Current time: {current_time}")
+    
+    # Only process if BUFFER_TIMEOUT seconds have passed since the first message or if we have a large batch of messages.
+    should_process = (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or \
+                     len(message_buffer[message_key]) >= 5
+    
+    return should_process
+
 # Local start command: uvicorn app:app --reload --port 8800
-# ngrok http http://localhost:8800
