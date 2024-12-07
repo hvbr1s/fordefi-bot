@@ -301,9 +301,10 @@ async def slack_events(request: Request):
 
         # Buffer the message
         message_key = f"{channel}:{user_id}"
+        arrival_time = datetime.now().timestamp()
         message_buffer[message_key].append({
             'text': user_text,
-            'timestamp': float(timestamp),
+            'timestamp': arrival_time,
             'event': event
         })
 
