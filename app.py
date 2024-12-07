@@ -24,7 +24,7 @@ app = FastAPI()
 # Set up message buffer and timers
 message_buffer = defaultdict(list)
 timers = {}
-BUFFER_TIMEOUT = 20 
+BUFFER_TIMEOUT = 25 
 
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
@@ -211,10 +211,10 @@ async def process_if_ready(message_key: str):
                 thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
             )
 
-            # try:
-            #     await thena(username=user_id, query=combined_text, summary=summary)
-            # except Exception as e:
-            #     print(f"Error creating Thena request: {str(e)}")
+            try:
+                await thena(username=user_id, query=combined_text, summary=summary)
+            except Exception as e:
+                print(f"Error creating Thena request: {str(e)}")
 
         # Clear the buffer after processing
         del message_buffer[message_key]
