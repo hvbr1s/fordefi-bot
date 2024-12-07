@@ -24,7 +24,7 @@ app = FastAPI()
 # Set up message buffer and timers
 message_buffer = defaultdict(list)
 timers = {}
-BUFFER_TIMEOUT = 3 
+BUFFER_TIMEOUT = 5 
 
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
