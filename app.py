@@ -184,7 +184,7 @@ async def process_if_ready(message_key: str):
     earliest_msg_time = message_buffer[message_key][0]['timestamp']
     current_time = datetime.now().timestamp()
 
-    # Check the same conditions you had before:
+    # Check time
     if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(message_buffer[message_key]) >= 5:
         # Time to process
         combined_text = " ".join(m['text'] for m in message_buffer[message_key])
@@ -228,11 +228,14 @@ async def schedule_processing(message_key: str):
         return
     
     async def delayed_check():
+        print(f"Starting {BUFFER_TIMEOUT}-second delay for key: {message_key}")
         await asyncio.sleep(BUFFER_TIMEOUT)
+        print(f"{BUFFER_TIMEOUT}-second delay finished for key: {message_key}, now processing.")
         # After the sleep, re-check if we can process
         await process_if_ready(message_key)
         # Remove the timer reference
         timers.pop(message_key, None)
+        print(f"Timer for key {message_key} removed from timers dict.")
     
     # Store the task so we know this key is scheduled
     timers[message_key] = asyncio.create_task(delayed_check())
@@ -313,10 +316,10 @@ async def slack_events(request: Request):
         print(f"Current buffer state: {dict(message_buffer)}")
 
         # Schedule processing after BUFFER_TIMEOUT
-        # await schedule_processing(message_key)
+        await schedule_processing(message_key)
 
         # If you want immediate processing if conditions are already met (e.g. multiple messages quickly):
-        await process_if_ready(message_key)
+        # await process_if_ready(message_key)
 
         return Response(status_code=200)
 
