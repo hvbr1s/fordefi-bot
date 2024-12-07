@@ -313,10 +313,10 @@ async def slack_events(request: Request):
         print(f"Current buffer state: {dict(message_buffer)}")
 
         # Schedule processing after BUFFER_TIMEOUT
-        await schedule_processing(message_key)
+        # await schedule_processing(message_key)
 
         # If you want immediate processing if conditions are already met (e.g. multiple messages quickly):
-        # await process_if_ready(message_key)
+        await process_if_ready(message_key)
 
         return Response(status_code=200)
 
