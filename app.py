@@ -211,10 +211,10 @@ async def process_if_ready(message_key: str):
                 thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
             )
 
-            try:
-                await thena(username=user_id, query=combined_text, summary=summary)
-            except Exception as e:
-                print(f"Error creating Thena request: {str(e)}")
+            # try:
+            #     await thena(username=user_id, query=combined_text, summary=summary)
+            # except Exception as e:
+            #     print(f"Error creating Thena request: {str(e)}")
 
         # Clear the buffer after processing
         del message_buffer[message_key]
@@ -306,6 +306,10 @@ async def slack_events(request: Request):
             'timestamp': float(timestamp),
             'event': event
         })
+
+        print(f"Buffered message key: {message_key}")
+        print(f"Buffered message content: {message_buffer[message_key]}")
+        print(f"Current buffer state: {dict(message_buffer)}")
 
         # Schedule processing after BUFFER_TIMEOUT
         await schedule_processing(message_key)
