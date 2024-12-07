@@ -84,10 +84,10 @@ async def ping_llm(query):
     designed for DeFi).
 
     Consider a message as relevant if it:
-    - A question or request for information
+    - Is a question or request for information
     - Asks questions about crypto transactions
     - Mentions Fordefi functionality
-    - Reports issues with the wallet or web app on mobile or desktop
+    - Reports issues with the Fordefi wallet or extension or web app on mobile or desktop
     - Requests support for DeFi operations
     - Request for help without other specifications
 
@@ -284,9 +284,9 @@ async def slack_events(request: Request):
             print('Ignoring, just someone deleting a message.')
             return Response(status_code=200)
         
-        # Check username condition carefully
+        # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'dean|fordefi|dan|poluy', user_name, re.IGNORECASE):
+        if re.search(r'dean|fordefi|poluy', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
