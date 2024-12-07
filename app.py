@@ -24,7 +24,7 @@ app = FastAPI()
 # Set up message buffer and timers
 message_buffer = defaultdict(list)
 timers = {}
-BUFFER_TIMEOUT = 10 
+BUFFER_TIMEOUT = 20 
 
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
@@ -311,8 +311,6 @@ async def slack_events(request: Request):
             'event': event
         })
 
-        print(f"Buffered message key: {message_key}")
-        print(f"Buffered message content: {message_buffer[message_key]}")
         print(f"Current buffer state: {dict(message_buffer)}")
 
         # Schedule processing after BUFFER_TIMEOUT
