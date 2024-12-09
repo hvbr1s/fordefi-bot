@@ -204,7 +204,7 @@ async def process_if_ready(message_key: str):
 
         if analysis == "yes":
             channel = event.get('channel')
-            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
+            ping_cs = f'<@U082GSCDFG9> <@U04LKS6KL7R> please take a look 😊'
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
