@@ -7,6 +7,7 @@ from fastapi import FastAPI, Request, Response
 from collections import defaultdict
 from datetime import datetime
 from llm.ping_bot import ping_llm
+from thena.create_ticket import thena
 from pydantic import BaseModel
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
@@ -34,7 +35,7 @@ slack_client = WebClient(token=SLACK_BOT_TOKEN)
 signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
 
 # Initialize bot user_id
-bot_id = slack_client.auth_test()['user_id'] 
+bot_id = slack_client.auth_test()['user_id']
 
 # Track event IDs to ignore duplicates
 processed_event_ids = set()
@@ -99,7 +100,7 @@ async def process_if_ready(message_key: str):
             )
 
             try:
-                # await thena(username=username, query=combined_text, summary=summary)
+                await thena(username=username, query=combined_text, summary=summary)
                 print("beep boop Thena ticket created!")
             except Exception as e:
                 print(f"Error creating Thena request: {str(e)}")
@@ -141,7 +142,7 @@ async def slack_events(request: Request):
     body_bytes = await request.body()
     body = json.loads(body_bytes)
 
-    # Verify the request is from Slack
+    # # Verify the request is from Slack
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         return Response(status_code=403)
     
@@ -209,3 +210,5 @@ async def slack_events(request: Request):
         return Response(status_code=200)
 
     return Response(status_code=200)
+
+# Local start command: uvicorn app:app --reload --port 8800
