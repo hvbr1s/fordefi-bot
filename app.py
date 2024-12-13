@@ -178,7 +178,7 @@ async def slack_events(request: Request):
         
         # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'dean|fordefi|poluy|@Ancientfish|@joshschwartz', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@michaelpoluy|@Ancientfish|@joshschwartz|@dimakogan1|@jacobgzx', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
