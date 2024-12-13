@@ -18,10 +18,12 @@ load_dotenv()
 # Initialize the FastAPI app
 app = FastAPI()
 
-# Set up message buffer and timers
+# Set up message buffer, timers and channel cooldown
 message_buffer = defaultdict(list)
 timers = {}
-BUFFER_TIMEOUT = 25 
+channel_last_processed = {}
+BUFFER_TIMEOUT = 25
+CHANNEL_COOLDOWN = 3600 # 1 hour
 
 # Secret Management
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
@@ -70,6 +72,15 @@ async def process_if_ready(message_key: str):
 
     earliest_msg_time = message_buffer[message_key][0]['timestamp']
     current_time = datetime.now().timestamp()
+    channel = message_buffer[message_key][0]['event'].get('channel')
+
+    # Check if channel is in cooldown
+    if channel in channel_last_processed:
+        time_since_last_process = current_time - channel_last_processed[channel]
+        if time_since_last_process < CHANNEL_COOLDOWN:
+            print(f"Channel {channel} is in cooldown. Clearing buffer without processing.")
+            del message_buffer[message_key]
+            return
 
     # Check time
     if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(message_buffer[message_key]) >= 5:
@@ -80,6 +91,7 @@ async def process_if_ready(message_key: str):
         event = message_buffer[message_key][0]['event']
         username = event.get('username')
 
+        # Send the text to LLM for analysis
         bot_response = await ping_llm(combined_text)
 
         if isinstance(bot_response, str):
@@ -91,8 +103,12 @@ async def process_if_ready(message_key: str):
         summary = (bot_response.query_summary).capitalize().strip()
 
         if analysis == "yes":
+
+            # Update the channel's last processed time
+            channel_last_processed[channel] = current_time
+
             channel = event.get('channel')
-            ping_cs = f'<@U082GSCDFG9> <@U04LKS6KL7R> please take a look 😊'
+            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
@@ -203,9 +219,6 @@ async def slack_events(request: Request):
 
         # Schedule processing after BUFFER_TIMEOUT
         await schedule_processing(message_key)
-
-        # Immediate processing if conditions are already met (optional):
-        # await process_if_ready(message_key)
 
         return Response(status_code=200)
 
