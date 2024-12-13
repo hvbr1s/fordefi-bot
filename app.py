@@ -101,6 +101,7 @@ async def process_if_ready(message_key: str):
             return
         analysis = (bot_response.customer_query).lower().strip()
         summary = (bot_response.query_summary).capitalize().strip()
+        urgency = (bot_response.urgency).capitalize().strip()
 
         if analysis == "yes":
 
@@ -116,7 +117,7 @@ async def process_if_ready(message_key: str):
             )
 
             try:
-                await thena(username=username, query=combined_text, summary=summary)
+                await thena(username=username, query=combined_text, summary=summary, urgency=urgency)
                 print("beep boop Thena ticket created!")
             except Exception as e:
                 print(f"Error creating Thena request: {str(e)}")

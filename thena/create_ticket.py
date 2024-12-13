@@ -1,7 +1,7 @@
 import os
 import requests
 
-async def thena(username, query, summary):
+async def thena(username, query, summary, urgency):
     url = "https://bolt.thena.ai/rest/v2/requests"
     headers = {
         "accept": "application/json",
@@ -15,9 +15,9 @@ async def thena(username, query, summary):
             "properties": {
                 "system": {
                     "title": summary,
-                    "description": f"**{username}**: '{query}'",
+                    "description": f"*{urgency}-urgency request from {username}*:\n '{query}'",
                     "sentiment": "Neutral", 
-                    "urgency":"Medium"
+                    "urgency":urgency
                 }},
             "assignment": {
                 "to_user_id": "6740cc1209c61cc23e36595f"
