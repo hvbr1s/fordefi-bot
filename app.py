@@ -2,16 +2,13 @@ import json
 import os
 import re
 import asyncio
-from typing import Optional
-from anthropic import AsyncAnthropic
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request, Response
-import httpx
-import instructor
 from collections import defaultdict
 from datetime import datetime
+from llm.ping_bot import ping_llm
+from thena.create_ticket import thena
 from pydantic import BaseModel
-import requests
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
 
@@ -38,7 +35,7 @@ slack_client = WebClient(token=SLACK_BOT_TOKEN)
 signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
 
 # Initialize bot user_id
-bot_id = slack_client.auth_test()['user_id'] 
+bot_id = slack_client.auth_test()['user_id']
 
 # Track event IDs to ignore duplicates
 processed_event_ids = set()
@@ -49,118 +46,8 @@ class SlackEvent(BaseModel):
     text: str
     channel: str
 
-class Analysis(BaseModel):
-    customer_query: str
-    query_summary: str
-
-# Init Anthropic client
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-3-5-sonnet-latest" #(smarter)
-instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
-
 #### FUNCTIONS ####
-
-async def bot(query: str, user_id: str) -> Optional[str]:
-    print("Sending request to server!")
-    error_message = "Sorry, too many requests. Try again in a minute!"
-
-    try:
-        response = await ping_llm(query)
-        return response 
-    except (httpx.TimeoutException, httpx.RequestError, httpx.HTTPStatusError, json.JSONDecodeError, Exception) as e:
-        print(f"Error occurred: {e}")
-        return error_message
-
-async def post_request(url: str, headers: dict, json_data: dict) -> httpx.Response:
-    async with httpx.AsyncClient(timeout=200) as client:
-        response = await client.post(url, headers=headers, json=json_data)
-        response.raise_for_status()
-        return response
-    
-async def ping_llm(query):
-    system = """
-    You are a customer service triage assistant. Your role is to analyze incoming messages 
-    and determine if they are customer queries related to crypto or Fordefi (a crypto wallet 
-    designed for DeFi).
-
-    Consider a message as relevant if it:
-    - Is a question or request for information
-    - Asks questions about crypto transactions
-    - Mentions Fordefi functionality
-    - Reports issues with the Fordefi wallet or extension or web app on mobile or desktop
-    - Requests support for DeFi operations
-    - Request for help without other specifications
-
-    Ignore the message if it:
-    - Contains no question or support request
-    - Is just a greeting (like "hi", "hello")
-    - Is just an acknowledgment (like "thanks", "okay")
-    - Is small talk or casual conversation
-    - Is a response to another message without a new question
-
-    Your response must be a JSON file with the following structure:
-        {
-        "customer_query": "[ANSWER 'YES' OR 'NO']",
-        "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]"
-        }
-    """
-    response = await instructor_client_anthropic.chat.completions.create(
-            model=model,
-            response_model=Analysis,
-            temperature=0.0,
-            max_tokens=512,
-            system=system,
-            messages=[
-                {
-                    "role": "user",
-                    "content": query,
-                }
-            ],
-        )
-    print(f"Analysis result: {response.customer_query.capitalize()}")
-    return response
-
-async def format_output(response: httpx.Response, link_pattern: str) -> Optional[str]:
-    response_json = response.json()
-    if 'output' in response_json:
-        return re.sub(link_pattern, r'<\2|\1>', response_json['output'])
-    else:
-        print("Output key not found in JSON response")
-        return None
-    
-async def thena(username, query, summary):
-    url = "https://bolt.thena.ai/rest/v2/requests"
-    headers = {
-        "accept": "application/json",
-        "content-type": "application/json",
-        "Authorization": f"Bearer {os.getenv('THENA_AUTH_TOKEN')}"
-    }
-
-    payload = {
-        "request": {
-            "status": "OPEN",
-            "properties": {
-                "system": {
-                    "title": summary,
-                    "description": f"**{username}**: '{query}'",
-                    "sentiment": "Neutral", 
-                    "urgency":"Medium"
-                }},
-            "assignment": {
-                "to_user_id": "6740cc1209c61cc23e36595f"
-            },
-            "created_for": {
-                "user_email": "customer@fordefi.com"
-            },
-            "private": False
-        }
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-    print(f"Thena API response status: {response.status_code}")
-    print(f"Thena API response content: {response.text}") 
-    return response
-
+        
 async def should_process_messages(message_key) -> bool:
     """Determine if we should process the buffered messages."""
     if not message_buffer[message_key]:
@@ -191,9 +78,10 @@ async def process_if_ready(message_key: str):
         print(f"Processing buffered messages for {message_key}: {combined_text}")
 
         event = message_buffer[message_key][0]['event']
-        user_id = event.get('username')
+        username = event.get('username')
 
-        bot_response = await bot(combined_text, user_id)
+        bot_response = await ping_llm(combined_text)
+
         if isinstance(bot_response, str):
             # If an error string is returned, just clear the buffer
             print("Bot response was an error string, clearing buffer.")
@@ -212,10 +100,11 @@ async def process_if_ready(message_key: str):
             )
 
             try:
-                await thena(username=user_id, query=combined_text, summary=summary)
+                await thena(username=username, query=combined_text, summary=summary)
+                print("beep boop Thena ticket created!")
             except Exception as e:
                 print(f"Error creating Thena request: {str(e)}")
-
+            
         # Clear the buffer after processing
         del message_buffer[message_key]
         print('Cleared buffer after processing!')
@@ -253,7 +142,7 @@ async def slack_events(request: Request):
     body_bytes = await request.body()
     body = json.loads(body_bytes)
 
-    # Verify the request is from Slack
+    # # Verify the request is from Slack
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         return Response(status_code=403)
     
@@ -289,7 +178,7 @@ async def slack_events(request: Request):
         
         # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'dean|fordefi|poluy|@Ancientfish', user_name, re.IGNORECASE):
+        if re.search(r'dean|fordefi|poluy|@Ancientfish|@joshschwartz', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
@@ -299,7 +188,6 @@ async def slack_events(request: Request):
 
         user_text = event.get('text')    
         user_id = event.get('username')
-        timestamp = event.get('ts')
         channel = event.get('channel')
 
         # Buffer the message
@@ -316,9 +204,11 @@ async def slack_events(request: Request):
         # Schedule processing after BUFFER_TIMEOUT
         await schedule_processing(message_key)
 
-        # If you want immediate processing if conditions are already met (e.g. multiple messages quickly):
+        # Immediate processing if conditions are already met (optional):
         # await process_if_ready(message_key)
 
         return Response(status_code=200)
 
     return Response(status_code=200)
+
+# Local start command: uvicorn app:app --reload --port 8800
