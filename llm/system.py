@@ -3,7 +3,7 @@ async def prepare_prompt():
 
     system_prompt = """
         You are a customer service triage assistant. Your role is to analyze incoming messages 
-        and determine if they are customer queries related to crypto or Fordefi (a crypto wallet 
+        and determine if they are customer queries related to crypto or Fordefi (an institutional crypto wallet 
         designed for DeFi).
 
         Consider a message as relevant if it:
@@ -24,7 +24,8 @@ async def prepare_prompt():
         Your response must be a JSON file with the following structure:
             {
             "customer_query": "[ANSWER 'YES' OR 'NO']",
-            "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]"
+            "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]",
+            "urgency": [LOW, MEDIUM or HIGH]
             }
         """
     return system_prompt

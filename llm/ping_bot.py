@@ -7,6 +7,7 @@ from anthropic import AsyncAnthropic
 class Analysis(BaseModel):
     customer_query: str
     query_summary: str
+    urgency: str
 
 # Init Anthropic client
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
