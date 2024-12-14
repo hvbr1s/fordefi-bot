@@ -107,17 +107,25 @@ async def process_if_ready(message_key: str):
 
             # Update the channel's last processed time
             channel_last_processed[channel] = current_time
-
             channel = event.get('channel')
+            thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
+
             ping_cs = f'<@U082GSCDFG9> please take a look 😊'
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
-                thread_ts=event.get('thread_ts') if event.get('thread_ts') else event.get('ts') 
+                thread_ts=thread_ts
             )
 
             try:
-                await thena(username=username, query=combined_text, summary=summary, urgency=urgency)
+                await thena(
+                    username=username, 
+                    query=combined_text, 
+                    summary=summary, 
+                    urgency=urgency,
+                    channel=channel,
+                    ts=thread_ts
+                )
                 print("beep boop Thena ticket created!")
             except Exception as e:
                 print(f"Error creating Thena request: {str(e)}")
@@ -159,7 +167,7 @@ async def slack_events(request: Request):
     body_bytes = await request.body()
     body = json.loads(body_bytes)
 
-    # # Verify the request is from Slack
+    # Verify the request is from Slack
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         return Response(status_code=403)
     
@@ -195,7 +203,7 @@ async def slack_events(request: Request):
         
         # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@michaelpoluy|@Ancientfish|@joshschwartz|@dimakogan1|@jacobgzx', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
