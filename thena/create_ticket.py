@@ -1,8 +1,17 @@
 import os
 import requests
 
-async def thena(username, query, summary, urgency):
+async def thena(username, query, summary, urgency, channel, ts):
+
+    message_link = f"https://slack.com/archives/{channel}/{ts.replace('.', '')}"
     url = "https://bolt.thena.ai/rest/v2/requests"
+    if urgency.lower() == "low":
+        severity = "🟢 Low"
+    elif urgency.lower() == "medium":
+        severity = "🟠 Medium"
+    elif urgency.lower() == "high":
+        severity = "🔴 High"
+
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
@@ -15,9 +24,9 @@ async def thena(username, query, summary, urgency):
             "properties": {
                 "system": {
                     "title": summary,
-                    "description": f"*{urgency}-urgency request from {username}*:\n '{query}'",
+                    "description": f"*{severity}-urgency request from {username}*:\n '{query}'\n\n*🔗 Link to Slack thread:* {message_link}",
                     "sentiment": "Neutral", 
-                    "urgency":urgency
+                    "urgency": urgency
                 }},
             "assignment": {
                 "to_user_id": "6740cc1209c61cc23e36595f"
