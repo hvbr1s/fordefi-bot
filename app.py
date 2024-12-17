@@ -110,7 +110,8 @@ async def process_if_ready(message_key: str):
             channel = event.get('channel')
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
 
-            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
+            ping_cs = f'<@U082GSCDFG9> please take a look 😊. <@U04LKS6KL7R>, ticket please 🎫' # pings Dan and Thena
+            # ping_cs = f'<@U04LKS6KL7R>, ticket please 🎫' # ping Thena
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
@@ -203,7 +204,7 @@ async def slack_events(request: Request):
         
         # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|dima|poluy|dean|telebot|ron', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
