@@ -110,7 +110,8 @@ async def process_if_ready(message_key: str):
             channel = event.get('channel')
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
 
-            ping_cs = f'<@U082GSCDFG9> please take a look 😊'
+            ping_cs = f'<@U082GSCDFG9> please take a look 😊. <@U04LKS6KL7R>, ticket please 🎫' # pings Dan and Thena
+            # ping_cs = f'<@U04LKS6KL7R>, ticket please 🎫' # ping Thena
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
