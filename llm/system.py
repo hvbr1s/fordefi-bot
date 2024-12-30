@@ -25,7 +25,7 @@ async def prepare_prompt():
             {
             "customer_query": "[ANSWER 'YES' OR 'NO']",
             "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]",
-            "urgency": [LOW, MEDIUM or HIGH]
+            "urgency": "[LOW, MEDIUM or HIGH]"
             }
         """
     return system_prompt

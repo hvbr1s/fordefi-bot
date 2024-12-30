@@ -19,19 +19,26 @@ async def ping_llm(query):
     print("Pinging the bot!")
 
     prompt = await prepare_prompt()
-
-    response = await instructor_client_anthropic.chat.completions.create(
-            model=model,
-            response_model=Analysis,
-            temperature=0.0,
-            max_tokens=512,
-            system=prompt ,
-            messages=[
-                {
-                    "role": "user",
-                    "content": query,
-                }
-            ],
+    try:
+        response = await instructor_client_anthropic.chat.completions.create(
+                model=model,
+                response_model=Analysis,
+                temperature=0.0,
+                max_tokens=512,
+                system=prompt ,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": query.strip(),
+                    }
+                ],
+            )
+        print(f"Analysis result: {response.customer_query.capitalize()}")
+        return response
+    except Exception as e:
+        print(f"Error pinging the bot {e}")
+        return Analysis(
+            customer_query="NO",
+            query_summary="ERROR",
+            urgency="MEDIUM"
         )
-    print(f"Analysis result: {response.customer_query.capitalize()}")
-    return response
