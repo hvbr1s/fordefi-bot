@@ -1,12 +1,20 @@
 import os
 import requests
 
-async def thena(username, query, summary, urgency, channel, ts):
+async def thena(username, query, summary, urgency, channel, ts, slack_client):
 
     processed_username = username.split('@')[0].strip()
+    thena_api_friendly_username = processed_username.replace(" ", "")
     #telegram_usertag =  username.split('@')[1].strip()
 
-    message_link = f"https://slack.com/archives/{channel}/{ts.replace('.', '')}"
+    # Get slack channel name
+    response = slack_client.conversations_info(channel=channel)
+    channel_info = response["channel"]
+    channel_name = channel_info["name"]
+    channel_parts = channel_name.split('-')
+    thena_api_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
+
+    message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}" # arnac.slack.com instead of slack.com
     url = "https://bolt.thena.ai/rest/v2/requests"
     if urgency.lower() == "low":
         severity = "🟢 Low"
@@ -35,7 +43,7 @@ async def thena(username, query, summary, urgency, channel, ts):
                 "to_user_id": "6740cc1209c61cc23e36595f" # Dan
             },
             "created_for": {
-                "user_email": f"customer@fordefi.com"
+                "user_email": f"{thena_api_friendly_username}@{thena_api_friendly_channel_name}.com"
             },
             "private": False
         }
