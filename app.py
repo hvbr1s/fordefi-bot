@@ -110,8 +110,16 @@ async def process_if_ready(message_key: str):
             channel = event.get('channel')
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
 
-            ping_cs = f'<@U082GSCDFG9> please take a look 😊. <@U04LKS6KL7R>, ticket please 🎫' # pings Dan and Thena
-            # ping_cs = f'<@U04LKS6KL7R>, ticket please 🎫' # ping Thena
+            # Check if it's Saturday
+            current_day = datetime.now().weekday()
+            if current_day in [5, 6]: # weekend
+                print("It's the weekend, pinging Dima and Dan!")
+                ping_cs = f'<@U02PP7JRTFS><@U082GSCDFG9> please take a look 😊.' # pings Dima and Dan
+                # ping_cs = f'<@U04LKS6KL7R>, ticket please 🎫' # pings Thena
+            else:
+                print("It's not the weekend, pinging Dan!")
+                ping_cs = f'<@U082GSCDFG9> please take a look 😊.' # pings Dan
+
             slack_client.chat_postMessage(
                 channel=channel,
                 text=ping_cs, 
@@ -221,6 +229,10 @@ async def slack_events(request: Request):
         channel_info = response["channel"]
         channel_name = channel_info["name"]
         print("Channel name is:", channel_name)
+
+        # response = slack_client.conversations_members(channel="C06FPKLS76V")
+        # member_ids = response["members"]
+        # print("Channel members are:", member_ids) 
 
         # Buffer the message
         message_key = f"{channel}:{user_id}"
