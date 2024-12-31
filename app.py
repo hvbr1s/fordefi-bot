@@ -125,7 +125,8 @@ async def process_if_ready(message_key: str):
                     summary=summary, 
                     urgency=urgency,
                     channel=channel,
-                    ts=thread_ts
+                    ts=thread_ts,
+                    slack_client=slack_client
                 )
                 print("*Beep Boop* Thena ticket created!")
             except Exception as e:
@@ -214,7 +215,12 @@ async def slack_events(request: Request):
 
         user_text = event.get('text')    
         user_id = event.get('username')
-        channel = event.get('channel')
+        channel = event.get('channel') # channel ID
+
+        response = slack_client.conversations_info(channel=channel)
+        channel_info = response["channel"]
+        channel_name = channel_info["name"]
+        print("Channel name is:", channel_name)
 
         # Buffer the message
         message_key = f"{channel}:{user_id}"
