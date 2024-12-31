@@ -26,8 +26,8 @@ async def thena(username, query, summary, urgency, channel, ts):
             "status": "OPEN",
             "properties": {
                 "system": {
-                    "title": summary,
-                    "description": f"{severity}-urgency request from {processed_username}:\n\n👨‍💻💬 _{query.strip()}_\n\n🔗 Link to Slack thread: {message_link}",
+                    "title": f"{severity}-urgency request from {processed_username}: {summary}",
+                    "description": f"👨‍💻💬 _{query.strip()}_\n\n🔗 Link to Slack thread: {message_link}",
                     "sentiment": "Neutral", 
                     "urgency": urgency
                 }},
