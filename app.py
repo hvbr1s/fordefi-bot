@@ -127,7 +127,7 @@ async def process_if_ready(message_key: str):
                     channel=channel,
                     ts=thread_ts
                 )
-                print("beep boop Thena ticket created!")
+                print("*Beep Boop* Thena ticket created!")
             except Exception as e:
                 print(f"Error creating Thena request: {str(e)}")
             

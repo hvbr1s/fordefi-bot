@@ -3,6 +3,9 @@ import requests
 
 async def thena(username, query, summary, urgency, channel, ts):
 
+    processed_username = username.split('@')[0].strip()
+    #telegram_usertag =  username.split('@')[1].strip()
+
     message_link = f"https://slack.com/archives/{channel}/{ts.replace('.', '')}"
     url = "https://bolt.thena.ai/rest/v2/requests"
     if urgency.lower() == "low":
@@ -24,15 +27,15 @@ async def thena(username, query, summary, urgency, channel, ts):
             "properties": {
                 "system": {
                     "title": summary,
-                    "description": f"{severity}-urgency request from {username}:\n\n👨‍💻💬 _{query.strip()}_\n\n🔗 Link to Slack thread: {message_link}",
+                    "description": f"{severity}-urgency request from {processed_username}:\n\n👨‍💻💬 _{query.strip()}_\n\n🔗 Link to Slack thread: {message_link}",
                     "sentiment": "Neutral", 
                     "urgency": urgency
                 }},
             "assignment": {
-                "to_user_id": "6740cc1209c61cc23e36595f"
+                "to_user_id": "6740cc1209c61cc23e36595f" # Dan
             },
             "created_for": {
-                "user_email": "customer@fordefi.com"
+                "user_email": f"customer@fordefi.com"
             },
             "private": False
         }
