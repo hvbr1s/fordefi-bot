@@ -1,7 +1,12 @@
 import os
 import requests
 
-async def thena(username, query, summary, urgency, channel, ts, slack_client):
+async def thena(username, query, summary, urgency, channel, ts, slack_client, current_day):
+
+    thena_id_dan = "6740cc1209c61cc23e36595f"
+    thena_id_dima = "63d61901d768b1397a450109"
+    default_assignee = thena_id_dima if current_day in [5,6] else thena_id_dan
+    print(f"Assigning the ticket to {default_assignee}")
 
     processed_username = username.split('@')[0].strip()
     thena_api_friendly_username = processed_username.replace(" ", "")
@@ -40,7 +45,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client):
                     "urgency": urgency
                 }},
             "assignment": {
-                "to_user_id": "6740cc1209c61cc23e36595f" # Dan
+                "to_user_id": default_assignee
             },
             "created_for": {
                 "user_email": f"{thena_api_friendly_username}@{thena_api_friendly_channel_name}.com"
