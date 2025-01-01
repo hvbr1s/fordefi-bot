@@ -134,7 +134,8 @@ async def process_if_ready(message_key: str):
                     urgency=urgency,
                     channel=channel,
                     ts=thread_ts,
-                    slack_client=slack_client
+                    slack_client=slack_client,
+                    current_day=current_day
                 )
                 print("*Beep Boop* Thena ticket created!")
             except Exception as e:
