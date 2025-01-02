@@ -11,6 +11,7 @@ from thena.create_ticket import thena
 from pydantic import BaseModel
 from slack_sdk import WebClient
 from slack_sdk.signature import SignatureVerifier
+from slack_post.enrich_post import enrich_bot_post
 
 # Load environment variables
 load_dotenv()
@@ -110,36 +111,34 @@ async def process_if_ready(message_key: str):
             channel = event.get('channel')
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
 
-            # Check if it's Saturday
+            # Fetch current day
             current_day = datetime.now().weekday()
-            if current_day in [5, 6]: # weekend
-                print("It's the weekend, pinging Dima and Dan!")
-                ping_cs = f'<@U02PP7JRTFS><@U082GSCDFG9> please take a look 😊.' # pings Dima and Dan
-                # ping_cs = f'<@U04LKS6KL7R>, ticket please 🎫' # pings Thena
-            else:
-                print("It's not the weekend, pinging Dan!")
-                ping_cs = f'<@U082GSCDFG9> please take a look 😊.' # pings Dan
 
-            slack_client.chat_postMessage(
-                channel=channel,
-                text=ping_cs, 
-                thread_ts=thread_ts
-            )
+            slack_post = await enrich_bot_post(username, combined_text, summary, urgency, channel, thread_ts, slack_client, current_day)
+            print(f"Slack post ready -> {slack_post}")
+
 
             try:
-                await thena(
-                    username=username, 
-                    query=combined_text, 
-                    summary=summary, 
-                    urgency=urgency,
+
+                post =  slack_client.chat_postMessage(
                     channel=channel,
-                    ts=thread_ts,
-                    slack_client=slack_client,
-                    current_day=current_day
+                    text=slack_post, 
+                    thread_ts=thread_ts
                 )
-                print("*Beep Boop* Thena ticket created!")
+                print("Posted on Slack! ✉️")
+
+                try:
+                    slack_client.reactions_add(
+                        channel=channel,
+                        timestamp=post['ts'],
+                        name='ticket'
+                    )
+                    print("Done adding ticket emoji! 🎫")
+                except Exception as e:
+                    print(f"Error adding the ticket emoji: {str(e)}")
+
             except Exception as e:
-                print(f"Error creating Thena request: {str(e)}")
+                print(f"Error posting on Slack: {str(e)}")
             
         # Clear the buffer after processing
         del message_buffer[message_key]
