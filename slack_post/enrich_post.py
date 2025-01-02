@@ -23,8 +23,8 @@ async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_
         severity = "🔴 High"
 
     post = f"""
-👨‍💻💬 _{query.strip()}_\n
-*{severity}-urgency request from {processed_username} ({slack_friendly_channel_name.title()})*\n\
+👨‍💻💬 *{processed_username} ({slack_friendly_channel_name.title()})*: _{query.strip()}_\n
+{severity}-urgency request\n\
 🔗 Link to Slack thread: {message_link}\n
 cc: {default_assignee}
 """
