@@ -8,6 +8,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
     default_assignee = dima if current_day in [5,6] else dan
     print(f"Assigning the ticket to {default_assignee}")
 
+    username = username or "User"
     processed_username = username if '@' not in username else username.split('@')[0]
     print(f"Processed Username -> {processed_username}")
     thena_api_friendly_username = processed_username.replace(" ", "")
