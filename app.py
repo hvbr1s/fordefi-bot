@@ -130,8 +130,8 @@ async def process_if_ready(message_key: str):
                 try:
                     slack_client.reactions_add(
                         channel=channel,
-                        #timestamp=post['ts'],
-                        timestamp=thread_ts,
+                        timestamp=post['ts'], # emotes SamBot's reply in the thread
+                        #timestamp=thread_ts, # emotes the post that started the thread
                         name='ticket'
                     )
                     print("Done adding ticket emoji! 🎫")
