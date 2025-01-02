@@ -179,8 +179,8 @@ async def slack_events(request: Request):
     body = json.loads(body_bytes)
 
     # Verify the request is from Slack
-    # if not signature_verifier.is_valid_request(body_bytes, request.headers):
-    #     return Response(status_code=403)
+    if not signature_verifier.is_valid_request(body_bytes, request.headers):
+        return Response(status_code=403)
     
     # Check if this is a URL verification challenge
     if body.get("type") == "url_verification":
