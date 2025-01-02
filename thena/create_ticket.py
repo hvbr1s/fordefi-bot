@@ -3,9 +3,9 @@ import requests
 
 async def thena(username, query, summary, urgency, channel, ts, slack_client, current_day):
 
-    thena_id_dan = "6740cc1209c61cc23e36595f"
-    thena_id_dima = "63d61901d768b1397a450109"
-    default_assignee = thena_id_dima if current_day in [5,6] else thena_id_dan
+    dan = "6740cc1209c61cc23e36595f"
+    dima = "63d61901d768b1397a450109"
+    default_assignee = dima if current_day in [5,6] else dan
     print(f"Assigning the ticket to {default_assignee}")
 
     processed_username = username.split('@')[0].strip()
@@ -19,7 +19,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
     channel_parts = channel_name.split('-')
     thena_api_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
-    message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}" # arnac.slack.com instead of slack.com
+    message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}"
     url = "https://bolt.thena.ai/rest/v2/requests"
     if urgency.lower() == "low":
         severity = "🟢 Low"
@@ -39,7 +39,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
             "status": "OPEN",
             "properties": {
                 "system": {
-                    "title": f"{severity}-urgency request from {processed_username}: {summary}",
+                    "title": f"{severity}-urgency request from {processed_username} ({thena_api_friendly_channel_name.title()}): {summary}",
                     "description": f"👨‍💻💬 _{query.strip()}_\n\n🔗 Link to Slack thread: {message_link}",
                     "sentiment": "Neutral", 
                     "urgency": urgency
