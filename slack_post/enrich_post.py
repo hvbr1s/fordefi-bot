@@ -16,15 +16,14 @@ async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_
 
     message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}"
     if urgency.lower() == "low":
-        severity = "🟢 Low"
+        severity = "🟢"
     elif urgency.lower() == "medium":
-        severity = "🟠 Medium"
+        severity = "🟠"
     elif urgency.lower() == "high":
-        severity = "🔴 High"
+        severity = "🔴"
 
     post = f"""
-👨‍💻💬 *{processed_username} ({slack_friendly_channel_name.title()})*: _{query.strip()}_\n
-{severity}-urgency request\n\
+{severity} *{processed_username} ({slack_friendly_channel_name.title()})*: _{query.strip()}_\n
 🔗 Link to Slack thread: {message_link}\n
 cc: {default_assignee}
 """
