@@ -3,8 +3,8 @@ import requests
 
 async def thena(username, query, summary, urgency, channel, ts, slack_client, current_day):
 
-    dan = "<@U082GSCDFG9>"
-    dima = "<@U02PP7JRTFS>"
+    dan = "6740cc1209c61cc23e36595f"
+    dima = "63d61901d768b1397a450109"
     default_assignee = dima if current_day in [5,6] else dan
     print(f"Assigning the ticket to {default_assignee}")
 
