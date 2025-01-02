@@ -8,7 +8,8 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
     default_assignee = dima if current_day in [5,6] else dan
     print(f"Assigning the ticket to {default_assignee}")
 
-    processed_username = username.split('@')[0].strip()
+    processed_username = username if '@' not in username else username.split('@')[0]
+    print(f"Processed Username -> {processed_username}")
     thena_api_friendly_username = processed_username.replace(" ", "")
     #telegram_usertag =  username.split('@')[1].strip()
 
@@ -16,6 +17,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
     response = slack_client.conversations_info(channel=channel)
     channel_info = response["channel"]
     channel_name = channel_info["name"]
+    print(f"Channel name before split -> {channel}")
     channel_parts = channel_name.split('-')
     thena_api_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
