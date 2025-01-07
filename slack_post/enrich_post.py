@@ -25,7 +25,6 @@ async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_
     post = f"""
 👨‍💻💬 *{processed_username.title()}* *({slack_friendly_channel_name.title()})*: _{query.strip()}_\n
 🔗 Link to Slack thread: {message_link}\n
-cc: {default_assignee}
 """
     
     return post
