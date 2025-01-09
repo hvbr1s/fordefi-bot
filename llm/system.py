@@ -13,6 +13,7 @@ async def prepare_prompt():
         - Reports issues with the Fordefi wallet or extension or web app on mobile or desktop
         - Requests support for DeFi operations
         - Request for help without other specifications
+        - Enquires about support for an upcoming blockchain or feature
 
         Ignore the message if it:
         - Contains no question or support request
