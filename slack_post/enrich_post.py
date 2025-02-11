@@ -14,7 +14,7 @@ async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_
     channel_parts = channel_name.split('-')
     slack_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
-    message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}"
+    message_link = f"https://arnac.slack.com/archives/{channel}/p{ts.replace('.', '')}"
     if urgency.lower() == "low":
         severity = "🟢"
     elif urgency.lower() == "medium":
