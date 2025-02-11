@@ -22,7 +22,7 @@ async def thena(username, query, summary, urgency, channel, ts, slack_client, cu
     channel_parts = channel_name.split('-')
     thena_api_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
-    message_link = f"https://arnac.slack.com/archives/{channel}/{ts.replace('.', '')}"
+    message_link = f"https://arnac.slack.com/archives/{channel}/p{ts.replace('.', '')}"
     url = "https://bolt.thena.ai/rest/v2/requests"
     if urgency.lower() == "low":
         severity = "🟢 Low"
