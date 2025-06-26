@@ -87,6 +87,8 @@ async def process_if_ready(message_key: str):
     if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(message_buffer[message_key]) >= 5:
         # Time to process
         combined_text = " ".join(m['text'] for m in message_buffer[message_key])
+        # Redact emails before sending to LLM
+        combined_text = redact_emails(combined_text)
         print(f"Processing buffered messages for {message_key}: {combined_text}")
 
         event = message_buffer[message_key][0]['event']
@@ -164,6 +166,12 @@ async def schedule_processing(message_key: str):
     
     # Store the task so we know this key is scheduled
     timers[message_key] = asyncio.create_task(delayed_check())
+
+def redact_emails(text: str) -> str:
+    """Replace all email addresses in the text with a generic redacted@email.com."""
+    # Simple regex for email detection
+    email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
+    return re.sub(email_pattern, "redacted@email.com", text)
 
 #### ROUTES ####
 
