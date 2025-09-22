@@ -222,7 +222,7 @@ async def slack_events(request: Request):
         
         # Check username condition
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|dima|poluy|dean|telebot|ron|@jacobgzx|@aprilXluo|@mlfigueroa89', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|dima|poluy|dean|telebot|ron|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi', user_name, re.IGNORECASE):
             print('Ignoring, just someone from Fordefi replying.')
             return Response(status_code=200)
 
@@ -238,10 +238,6 @@ async def slack_events(request: Request):
         channel_info = response["channel"]
         channel_name = channel_info["name"]
         print("Channel name is:", channel_name)
-
-        # response = slack_client.conversations_members(channel="C06FPKLS76V")
-        # member_ids = response["members"]
-        # print("Channel members are:", member_ids) 
 
         # Buffer the message
         message_key = f"{channel}:{user_id}"
