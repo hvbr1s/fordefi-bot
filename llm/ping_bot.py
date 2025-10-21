@@ -11,8 +11,8 @@ class Analysis(BaseModel):
 
 # Init Anthropic client
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-sonnet-4-20250514" #(smarter)
-fallback_model = "claude-3-5-haiku-20241022"
+model = "claude-haiku-4-5-20251001" # fastest
+fallback_model = "claude-sonnet-4-5-20250929" # smarter, slower
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 async def ping_llm(query):
