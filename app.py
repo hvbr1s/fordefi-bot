@@ -170,7 +170,7 @@ def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
-def log_request(urgency: str, summary: str, log_file: str = "request_logs.json"):
+def log_request(urgency: str, summary: str, log_file: str = "/disk/data/request_logs.json"):
     """Log request details to a JSON file."""
     timestamp = datetime.now().isoformat()
     log_entry = {
