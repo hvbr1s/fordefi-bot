@@ -48,8 +48,6 @@ class SlackEvent(BaseModel):
     user: str
     text: str
     channel: str
-
-#### FUNCTIONS ####
         
 async def should_process_messages(message_key) -> bool:
     """Determine if we should process the buffered messages."""
@@ -106,8 +104,10 @@ async def process_if_ready(message_key: str):
         summary = (bot_response.query_summary).capitalize().strip()
         urgency = (bot_response.urgency).capitalize().strip()
 
-        if analysis == "yes":
+        # Log the request
+        log_request(urgency, summary)
 
+        if analysis == "yes":
             # Update the channel's last processed time
             channel_last_processed[channel] = current_time
             channel = event.get('channel')
@@ -116,10 +116,8 @@ async def process_if_ready(message_key: str):
             # Fetch current day
             current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, summary, urgency, channel, thread_ts, slack_client, current_day)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day)
             print(f"Slack post ready -> {slack_post}")
-
-
             try:
 
                 post =  slack_client.chat_postMessage(
@@ -169,12 +167,34 @@ async def schedule_processing(message_key: str):
 
 def redact_emails(text: str) -> str:
     """Replace all email addresses in the text with a generic redacted@email.com."""
-    # Simple regex for email detection
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
-#### ROUTES ####
+def log_request(urgency: str, summary: str, log_file: str = "request_logs.json"):
+    """Log request details to a JSON file."""
+    timestamp = datetime.now().isoformat()
+    log_entry = {
+        "timestamp": timestamp,
+        "urgency": urgency,
+        "summary": summary
+    }
+    # Read existing logs or create new list
+    logs = []
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, 'r') as f:
+                logs = json.load(f)
+        except json.JSONDecodeError:
+            # If file is corrupted, start fresh
+            logs = []
+    # Append new log entry
+    logs.append(log_entry)
+    # Write back to file
+    with open(log_file, 'w') as f:
+        json.dump(logs, f, indent=2)
+    print(f"Logged request: {timestamp} | {urgency} | {summary}")
 
+#### ROUTES ####
 @app.get("/_health")
 async def health_check():
     return {"status": "OK"}
