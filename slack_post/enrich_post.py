@@ -1,10 +1,8 @@
-async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_client, current_day):
-
-    dan = "<@U082GSCDFG9>"
-    dima = "<@U02PP7JRTFS>"
-    default_assignee = dima if current_day in [5,6] else dan
-    print(f"Assigning the ticket to {default_assignee}")
-
+async def enrich_bot_post(username, query, channel, ts, slack_client, current_day):
+    # dan = "<@U082GSCDFG9>"
+    # dima = "<@U02PP7JRTFS>"
+    # default_assignee = dima if current_day in [5,6] else dan
+    # print(f"Assigning the ticket to {default_assignee}")
     processed_username = username.split('@')[0].strip()
 
     # Get slack channel name
@@ -15,15 +13,8 @@ async def enrich_bot_post(username, query, summary, urgency, channel, ts, slack_
     slack_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
     message_link = f"https://arnac.slack.com/archives/{channel}/p{ts.replace('.', '')}"
-    if urgency.lower() == "low":
-        severity = "🟢"
-    elif urgency.lower() == "medium":
-        severity = "🟠"
-    elif urgency.lower() == "high":
-        severity = "🔴"
-
     post = f"""
-👨‍💻💬 *{processed_username.title()}* *({slack_friendly_channel_name.title()})*: _{query.strip()}_\n
+👨‍💻💬 *{processed_username.title()}* *({slack_friendly_channel_name.title()})*: _{query.strip().replace('\n', ' ')}_\n
 🔗 Link to Slack thread: {message_link}\n
 """
     

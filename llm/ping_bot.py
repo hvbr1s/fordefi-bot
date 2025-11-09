@@ -16,9 +16,7 @@ fallback_model = "claude-sonnet-4-5-20250929" # smarter, slower
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 async def ping_llm(query):
-
     print(f"Pinging {model}!")
-
     prompt = await prepare_prompt()
     try:
         response = await instructor_client_anthropic.chat.completions.create(
