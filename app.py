@@ -4,13 +4,13 @@ import re
 import asyncio
 import logging
 from dotenv import load_dotenv
-from fastapi import FastAPI, Request, Response
-from collections import defaultdict
 from datetime import datetime
 from llm.ping_bot import ping_llm
-from thena.create_ticket import thena
 from pydantic import BaseModel
 from slack_sdk import WebClient
+from collections import defaultdict
+from thena.create_ticket import thena
+from fastapi import FastAPI, Request, Response
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
 
@@ -95,9 +95,8 @@ async def process_buffered_messages(message_key: str):
         summary = (bot_response.query_summary).capitalize().strip()
         urgency = (bot_response.urgency).capitalize().strip()
 
-        log_request(urgency, summary)
-
         if analysis == "yes":
+            log_request(urgency, summary)
             channel_last_processed[channel] = current_time
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()

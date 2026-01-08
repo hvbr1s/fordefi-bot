@@ -1,8 +1,16 @@
 import os
+import logging
 import instructor
 from llm.system import prepare_prompt
 from pydantic import BaseModel
 from anthropic import AsyncAnthropic
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s | %(levelname)s | %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 class Analysis(BaseModel):
     customer_query: str
@@ -16,7 +24,7 @@ fallback_model = "claude-sonnet-4-5-20250929" # smarter, slower
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 async def ping_llm(query):
-    print(f"Pinging {model}!")
+    logger.info(f"Starting LLM analysis | model={model}")
     prompt = await prepare_prompt()
     try:
         response = await instructor_client_anthropic.chat.completions.create(
@@ -32,12 +40,12 @@ async def ping_llm(query):
                     }
                 ],
             )
-        print(f"Analysis result: {response.customer_query.capitalize()}")
+        logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
         return response
     except Exception as e:
-        print(f"Error pinging {model}:  {e}")
+        logger.error(f"LLM analysis failed | model={model} | error={str(e)}")
         try:
-            print(f"Pinging {fallback_model}")
+            logger.info(f"Attempting fallback | model={fallback_model}")
             response = await instructor_client_anthropic.chat.completions.create(
                     model=fallback_model,
                     response_model=Analysis,
@@ -51,10 +59,11 @@ async def ping_llm(query):
                         }
                     ],
                 )
-            print(f"Analysis result: {response.customer_query.capitalize()}")
+            logger.info(f"Fallback analysis complete | model={fallback_model} | customer_query={response.customer_query} | urgency={response.urgency}")
             return response
         except Exception as e:
-            print(f"Error pinging {fallback_model} {e}")
+            logger.error(f"Fallback analysis failed | model={fallback_model} | error={str(e)}")
+            logger.warning("Returning default error response")
             return Analysis(
                 customer_query="NO",
                 query_summary="ERROR",

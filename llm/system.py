@@ -7,9 +7,10 @@ async def prepare_prompt():
         designed for DeFi).
 
         Consider a message as relevant if it:
-        - Is a question or request for information
+        - Is a question or request for information or a request for explanation
         - Asks questions about crypto transactions
         - Mentions Fordefi functionality
+        - Mentions Paxos functionality
         - Reports issues with the Fordefi wallet or extension or web app on mobile or desktop
         - Requests support for DeFi operations
         - Request for help without other specifications
@@ -25,7 +26,7 @@ async def prepare_prompt():
         Your response must be a JSON file with the following structure:
             {
             "customer_query": "[ANSWER 'YES' OR 'NO']",
-            "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 7 WORDS MAX]",
+            "query_summary": "[A VERY SHORT SUMMARY OF THE QUERY IN 15 WORDS MAX]",
             "urgency": "[LOW, MEDIUM or HIGH]"
             }
         """

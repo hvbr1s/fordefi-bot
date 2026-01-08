@@ -7,8 +7,8 @@ Slack bot for monitoring customer queries and creating support tickets.
 Run tests from the project root:
 
 ```bash
-pytest tests/test_app.py -v
-pytest tests/test_llm_integration.py -v
+.venv/bin/pytest tests/test_app.py -v
+.venv/bin/pytest tests/test_llm_integration.py -v
 ```
 
 Or run all tests:
