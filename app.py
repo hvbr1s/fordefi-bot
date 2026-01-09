@@ -98,7 +98,9 @@ async def process_buffered_messages(message_key: str):
         urgency = (bot_response.urgency).capitalize().strip()
 
         if analysis == "yes":
-            log_request(urgency, summary)
+            channel_name = message_buffer[message_key][0].get('channel_name', '')
+            display_channel = channel_name.removeprefix('fordefi-') if channel_name else ''
+            log_request(urgency, summary, display_channel)
             channel_last_processed[channel] = current_time
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()
@@ -147,13 +149,14 @@ def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
-def log_request(urgency: str, summary: str, log_file: str = "/disk/data/request_logs.json"):
+def log_request(urgency: str, summary: str, channel_name: str, log_file: str = "/disk/data/request_logs.json"):
     """Persist customer query details to JSON log file."""
     timestamp = datetime.now().isoformat()
     log_entry = {
         "timestamp": timestamp,
         "urgency": urgency,
-        "summary": summary
+        "summary": summary,
+        "channel": channel_name
     }
 
     logs = []
@@ -248,7 +251,8 @@ async def slack_events(request: Request):
         message_buffer[message_key].append({
             'text': user_text,
             'timestamp': arrival_time,
-            'event': event
+            'event': event,
+            'channel_name': channel_name
         })
 
         buffer_size = len(message_buffer[message_key])
