@@ -14,3 +14,6 @@ wheels/
 
 # tests
 tests/
+
+# logs
+requests.json
