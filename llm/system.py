@@ -9,6 +9,7 @@ async def prepare_prompt():
         Consider a message as relevant if it:
         - Is a question or request for information or a request for explanation
         - Asks questions about crypto transactions
+        - Asks questions about the Fordefi API or the API Signer
         - Mentions Fordefi functionality
         - Mentions Paxos functionality
         - Reports issues with the Fordefi wallet or extension or web app on mobile or desktop
