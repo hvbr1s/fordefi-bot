@@ -19,8 +19,8 @@ class Analysis(BaseModel):
 
 # Init Anthropic client
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-haiku-4-5-20251001" # fastest
-fallback_model = "claude-sonnet-4-5-20250929" # smarter, slower
+model = "claude-opus-4-5" # smart, slow
+fallback_model = "claude-haiku-4-5" # fastest, dumb
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 async def ping_llm(query):
@@ -29,9 +29,10 @@ async def ping_llm(query):
     try:
         response = await instructor_client_anthropic.chat.completions.create(
                 model=model,
+                betas=["effort-2025-11-24"],
                 response_model=Analysis,
                 temperature=0.0,
-                max_tokens=512,
+                max_tokens=1024,
                 system=prompt ,
                 messages=[
                     {
@@ -39,6 +40,9 @@ async def ping_llm(query):
                         "content": query.strip(),
                     }
                 ],
+                output_config={
+                    "effort": "medium"
+                }
             )
         logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
         return response
@@ -50,7 +54,7 @@ async def ping_llm(query):
                     model=fallback_model,
                     response_model=Analysis,
                     temperature=0.0,
-                    max_tokens=512,
+                    max_tokens=1024,
                     system=prompt ,
                     messages=[
                         {
