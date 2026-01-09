@@ -29,7 +29,7 @@ async def ping_llm(query):
     try:
         response = await instructor_client_anthropic.chat.completions.create(
                 model=model,
-                betas=["effort-2025-11-24"],
+                # betas=["effort-2025-11-24"],
                 response_model=Analysis,
                 temperature=0.0,
                 max_tokens=1024,
@@ -40,9 +40,9 @@ async def ping_llm(query):
                         "content": query.strip(),
                     }
                 ],
-                output_config={
-                    "effort": "medium"
-                }
+                # output_config={
+                #     "effort": "medium"
+                # }
             )
         logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
         return response
