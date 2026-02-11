@@ -232,7 +232,7 @@ async def slack_events(request: Request):
             return Response(status_code=200)
 
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|ron|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|dor|@Or0104', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|ron|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|dor|@Or0104|@itsamemario1988', user_name, re.IGNORECASE):
             return Response(status_code=200)
 
         if not event.get('text'):
