@@ -145,18 +145,17 @@ async def schedule_processing(message_key: str):
     timers[message_key] = asyncio.create_task(delayed_check())
 
 def redact_emails(text: str) -> str:
-    """Replace email addresses with redacted@email.com."""
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
 def log_request(urgency: str, summary: str, channel_name: str, log_file: str = "/disk/data/request_logs.json"):
-    """Persist customer query details to JSON log file."""
     timestamp = datetime.now().isoformat()
     log_entry = {
         "timestamp": timestamp,
         "urgency": urgency,
         "summary": summary,
-        "channel": channel_name
+        "channel": channel_name,
+        "platform": "telegram"
     }
 
     logs = []
@@ -181,7 +180,6 @@ async def health_check():
 
 @app.get("/admin/logs")
 async def download_logs(authorization: str = Header(None)):
-    """Admin endpoint to download request logs JSON file."""
     if not ADMIN_AUTH_KEY:
         logger.error("ADMIN_AUTH_KEY not configured")
         raise HTTPException(status_code=500, detail="Admin auth not configured")
