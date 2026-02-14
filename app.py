@@ -9,7 +9,7 @@ from llm.ping_bot import ping_llm
 from pydantic import BaseModel
 from slack_sdk import WebClient
 from collections import defaultdict
-from thena.create_ticket import thena
+#from thena.create_ticket import thena
 from fastapi.responses import FileResponse
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
@@ -49,7 +49,6 @@ class SlackEvent(BaseModel):
     channel: str
         
 async def should_process_buffer(message_key) -> bool:
-    """Check if buffer is ready for processing based on timeout or size."""
     if not message_buffer[message_key]:
         return False
 
@@ -61,7 +60,6 @@ async def should_process_buffer(message_key) -> bool:
     return should_process
 
 async def process_buffered_messages(message_key: str):
-    """Process buffered messages: analyze with LLM and post response if customer query."""
     if message_key not in message_buffer or not message_buffer[message_key]:
         return
 
@@ -133,7 +131,6 @@ async def process_buffered_messages(message_key: str):
         del message_buffer[message_key]
 
 async def schedule_processing(message_key: str):
-    """Schedule delayed processing of buffered messages."""
     if message_key in timers:
         return
 
@@ -154,7 +151,7 @@ def log_request(urgency: str, summary: str, channel_name: str, log_file: str = "
         "timestamp": timestamp,
         "urgency": urgency,
         "summary": summary,
-        "channel": channel_name,
+        "client": channel_name,
         "platform": "telegram"
     }
 
@@ -230,7 +227,7 @@ async def slack_events(request: Request):
             return Response(status_code=200)
 
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|ron|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|dor|@Or0104|@itsamemario1988', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|@ThetcdDC|@Or0104|@itsamemario1988', user_name, re.IGNORECASE):
             return Response(status_code=200)
 
         if not event.get('text'):

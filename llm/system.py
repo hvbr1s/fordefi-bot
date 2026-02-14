@@ -1,6 +1,6 @@
 
 async def prepare_prompt():
-
+    
     system_prompt = """
         You are a customer service triage assistant. Your role is to analyze incoming messages 
         and determine if they are customer queries related to crypto or Fordefi (an institutional crypto MPC wallet 
