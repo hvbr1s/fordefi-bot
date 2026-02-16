@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from llm.ping_bot import ping_llm
 from pydantic import BaseModel
 from slack_sdk import WebClient
+from typing import Any, Optional, List
 from collections import defaultdict
 #from thena.create_ticket import thena
 from fastapi.responses import FileResponse
@@ -94,16 +95,18 @@ async def process_buffered_messages(message_key: str):
         analysis = (bot_response.customer_query).lower().strip()
         summary = (bot_response.query_summary).capitalize().strip()
         urgency = (bot_response.urgency).capitalize().strip()
+        transaction_ids = [tid.strip() for tid in bot_response.transaction_ids if tid.strip()]
+        request_ids = [rid.strip() for rid in bot_response.request_ids if rid.strip()]
 
         if analysis == "yes":
             channel_name = message_buffer[message_key][0].get('channel_name', '')
             display_channel = channel_name.removeprefix('fordefi-') if channel_name else ''
-            log_request(urgency, summary, display_channel)
+            log_request(urgency, summary, display_channel, transaction_ids, request_ids)
             channel_last_processed[channel] = current_time
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day, transaction_ids, request_ids)
             logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
             try:
@@ -145,15 +148,19 @@ def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
-def log_request(urgency: str, summary: str, channel_name: str, log_file: str = "/disk/data/request_logs.json"):
+def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, log_file: str = "/disk/data/request_logs.json"):
     timestamp = datetime.now().isoformat()
-    log_entry = {
+    log_entry: dict[str, Any] = {
         "timestamp": timestamp,
         "urgency": urgency,
         "summary": summary,
         "client": channel_name,
         "platform": "telegram"
     }
+    if transaction_ids:
+        log_entry["transaction_ids"] = transaction_ids
+    if request_ids:
+        log_entry["request_ids"] = request_ids
 
     logs = []
     if os.path.exists(log_file):
@@ -171,6 +178,7 @@ def log_request(urgency: str, summary: str, channel_name: str, log_file: str = "
             json.dump(logs, f, indent=2)
     except Exception as e:
         logger.error(f"Failed to write to log file | Error: {str(e)}")
+        
 @app.get("/_health")
 async def health_check():
     return {"status": "OK"}
