@@ -23,10 +23,10 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, current_da
 
     for tx_id in (transaction_ids or []):
         dd_tx_link = DATADOG_TRANSACTION_ID_URL.format(id=tx_id)
-        post += f"🔍 <{dd_tx_link}|Datadog Logs (Transaction ID: {tx_id})>\n"
+        post += f"🐶 DD Logs:\n <{dd_tx_link}|TxID: {tx_id}>\n"
     for req_id in (request_ids or []):
         dd_req_link = DATADOG_REQUEST_ID_URL.format(id=req_id)
-        post += f"🔍 <{dd_req_link}|Datadog Logs (Request ID: {req_id})>\n"
+        post += f"🐶 DD Logs:\n <{dd_req_link}|RequestID: {req_id}>\n"
 
     return post
 

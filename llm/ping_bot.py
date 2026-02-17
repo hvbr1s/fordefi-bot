@@ -1,10 +1,10 @@
 import os
 import logging
 import instructor
-from llm.system import prepare_prompt
 from typing import List
 from pydantic import BaseModel
 from anthropic import AsyncAnthropic
+from llm.system import prepare_prompt
 
 logging.basicConfig(
     level=logging.INFO,
