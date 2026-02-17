@@ -167,7 +167,7 @@ def redact_emails(text: str) -> str:
     return re.sub(email_pattern, "redacted@email.com", text)
 
 def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, organization_id: Optional[str] = None, log_file: str = "/disk/data/request_logs.json"):
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now().isoformat(timespec="seconds")
     log_entry: dict[str, Any] = {
         "timestamp": timestamp,
         "urgency": urgency,

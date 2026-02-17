@@ -1,14 +1,12 @@
-DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.xrequestid%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&live=true"
-DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&live=true"
+from datetime import datetime, timedelta
+
+LOOKBACK_DAYS = 2
+DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.xrequestid%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
+DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 
 async def enrich_bot_post(username, query, channel, ts, slack_client, current_day, transaction_ids=None, request_ids=None, organization_id=None):
-    # dan = "<@U082GSCDFG9>"
-    # dima = "<@U02PP7JRTFS>"
-    # default_assignee = dima if current_day in [5,6] else dan
-    # print(f"Assigning the ticket to {default_assignee}")
     processed_username = username.split('@')[0].strip()
 
-    # Get slack channel name
     response = slack_client.conversations_info(channel=channel)
     channel_info = response["channel"]
     channel_name = channel_info["name"]
@@ -24,13 +22,16 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, current_da
     if organization_id:
         post += f"🏢 Organization ID: {organization_id}\n"
 
-    for tx_id in (transaction_ids or []):
-        dd_tx_link = DATADOG_TRANSACTION_ID_URL.format(id=tx_id)
-        post += f"🐶 DD Logs:\n <{dd_tx_link}|TxID: {tx_id}>\n"
-    for req_id in (request_ids or []):
-        dd_req_link = DATADOG_REQUEST_ID_URL.format(id=req_id)
-        post += f"🐶 DD Logs:\n <{dd_req_link}|RequestID: {req_id}>\n"
+    if transaction_ids or request_ids:
+        now = datetime.now()
+        to_ts = int(now.timestamp() * 1000)
+        from_ts = int((now - timedelta(days=LOOKBACK_DAYS)).timestamp() * 1000)
+
+        for tx_id in (transaction_ids or []):
+            dd_tx_link = DATADOG_TRANSACTION_ID_URL.format(id=tx_id, from_ts=from_ts, to_ts=to_ts)
+            post += f"🐶 DD Logs:\n <{dd_tx_link}|TxID: {tx_id}>\n"
+        for req_id in (request_ids or []):
+            dd_req_link = DATADOG_REQUEST_ID_URL.format(id=req_id, from_ts=from_ts, to_ts=to_ts)
+            post += f"🐶 DD Logs:\n <{dd_req_link}|RequestID: {req_id}>\n"
 
     return post
-
-## ThenaCS user ID <@U04LKS6KL7R>
