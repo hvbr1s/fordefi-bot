@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "anthropic>=0.40.0",
+    "datadog-api-client>=2.50.0",
     "fastapi>=0.115.5",
     "httpx>=0.28.0",
     "instructor>=1.7.0",

@@ -11,6 +11,7 @@ from llm.ping_bot import ping_llm
 from typing import Any, Optional, List
 from collections import defaultdict
 #from thena.create_ticket import thena
+from datadog.identify_id import identify_uuid
 from fastapi.responses import FileResponse
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
@@ -95,18 +96,35 @@ async def process_buffered_messages(message_key: str):
         analysis = (bot_response.customer_query).lower().strip()
         summary = (bot_response.query_summary).capitalize().strip()
         urgency = (bot_response.urgency).capitalize().strip()
-        transaction_ids = [tid.strip() for tid in bot_response.transaction_ids if tid.strip()]
-        request_ids = [rid.strip() for rid in bot_response.request_ids if rid.strip()]
+        uuids = [u.strip() for u in bot_response.uuids if u.strip()]
+
+        # Classify UUIDs via Datadog
+        transaction_ids = []
+        request_ids = []
+        organization_id = None
+        for uuid in uuids:
+            try:
+                result = await asyncio.to_thread(identify_uuid, uuid)
+                id_type = result.get("id_type", "unknown")
+                if id_type in ("transaction_id", "both"):
+                    transaction_ids.append(uuid)
+                if id_type in ("request_id", "both"):
+                    request_ids.append(uuid)
+                if organization_id is None and result.get("organization_id"):
+                    organization_id = result["organization_id"]
+                logger.info(f"UUID classified | uuid={uuid} | type={id_type} | org_id={result.get('organization_id')}")
+            except Exception as e:
+                logger.error(f"Datadog lookup failed for {uuid}: {str(e)}")
 
         if analysis == "yes":
             channel_name = message_buffer[message_key][0].get('channel_name', '')
             display_channel = channel_name.removeprefix('fordefi-') if channel_name else ''
-            log_request(urgency, summary, display_channel, transaction_ids, request_ids)
+            log_request(urgency, summary, display_channel, transaction_ids, request_ids, organization_id)
             channel_last_processed[channel] = current_time
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day, transaction_ids, request_ids)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day, transaction_ids, request_ids, organization_id)
             logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
             try:
@@ -148,7 +166,7 @@ def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
 
-def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, log_file: str = "/disk/data/request_logs.json"):
+def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, organization_id: Optional[str] = None, log_file: str = "/disk/data/request_logs.json"):
     timestamp = datetime.now().isoformat()
     log_entry: dict[str, Any] = {
         "timestamp": timestamp,
@@ -161,6 +179,8 @@ def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: 
         log_entry["transaction_ids"] = transaction_ids
     if request_ids:
         log_entry["request_ids"] = request_ids
+    if organization_id:
+        log_entry["organization_id"] = organization_id
 
     logs = []
     if os.path.exists(log_file):
