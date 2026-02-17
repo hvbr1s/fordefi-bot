@@ -124,7 +124,7 @@ async def process_buffered_messages(message_key: str):
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day, transaction_ids, request_ids, organization_id)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, transaction_ids, request_ids, organization_id)
             logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
             try:
