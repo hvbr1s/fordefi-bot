@@ -20,7 +20,7 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, current_da
 """
 
     if organization_id:
-        post += f"🏢 Organization ID: {organization_id}\n"
+        post += f"🏢 Organization ID: \n {organization_id}\n"
 
     if transaction_ids or request_ids:
         now = datetime.now()
