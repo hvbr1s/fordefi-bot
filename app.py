@@ -124,7 +124,7 @@ async def process_buffered_messages(message_key: str):
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
             current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, current_day, transaction_ids, request_ids, organization_id)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, transaction_ids, request_ids, organization_id)
             logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
             try:
@@ -167,7 +167,7 @@ def redact_emails(text: str) -> str:
     return re.sub(email_pattern, "redacted@email.com", text)
 
 def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, organization_id: Optional[str] = None, log_file: str = "/disk/data/request_logs.json"):
-    timestamp = datetime.now().isoformat()
+    timestamp = datetime.now().isoformat(timespec="seconds")
     log_entry: dict[str, Any] = {
         "timestamp": timestamp,
         "urgency": urgency,
