@@ -17,8 +17,7 @@ class Analysis(BaseModel):
     customer_query: str
     query_summary: str
     urgency: str
-    transaction_ids: List[str]
-    request_ids: List[str]
+    uuids: List[str]
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 model = "claude-opus-4-6" # smart, slow-ish
@@ -74,6 +73,5 @@ async def ping_llm(query):
                 customer_query="NO",
                 query_summary="ERROR",
                 urgency="MEDIUM",
-                transaction_ids=[],
-                request_ids=[]
+                uuids=[]
             )
