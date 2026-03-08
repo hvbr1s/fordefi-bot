@@ -102,6 +102,7 @@ async def process_buffered_messages(message_key: str):
         transaction_ids = []
         request_ids = []
         organization_id = None
+        organization_name = None
         for uuid in uuids:
             try:
                 result = await asyncio.to_thread(identify_uuid, uuid)
@@ -112,7 +113,8 @@ async def process_buffered_messages(message_key: str):
                     request_ids.append(uuid)
                 if organization_id is None and result.get("organization_id"):
                     organization_id = result["organization_id"]
-                logger.info(f"UUID classified | uuid={uuid} | type={id_type} | org_id={result.get('organization_id')}")
+                    organization_name = result.get("organization_name")
+                logger.info(f"UUID classified | uuid={uuid} | type={id_type} | org_id={result.get('organization_id')} | org_name={result.get('organization_name')}")
             except Exception as e:
                 logger.error(f"Datadog lookup failed for {uuid}: {str(e)}")
 
@@ -122,9 +124,8 @@ async def process_buffered_messages(message_key: str):
             log_request(urgency, summary, display_channel, transaction_ids, request_ids, organization_id)
             channel_last_processed[channel] = current_time
             thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
-            current_day = datetime.now().weekday()
 
-            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, transaction_ids, request_ids, organization_id)
+            slack_post = await enrich_bot_post(username, combined_text, channel, thread_ts, slack_client, transaction_ids, request_ids, organization_id, organization_name)
             logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
             try:
