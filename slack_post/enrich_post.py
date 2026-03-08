@@ -21,7 +21,7 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
 
     if organization_id:
         org_display = f"*{organization_name}* ({organization_id})" if organization_name else organization_id
-        post += f"🏢 Organization: \n {org_display}\n"
+        post += f"🏢 {org_display}\n"
 
     if transaction_ids or request_ids:
         now = datetime.now()
@@ -30,9 +30,9 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
 
         for tx_id in (transaction_ids or []):
             dd_tx_link = DATADOG_TRANSACTION_ID_URL.format(id=tx_id, from_ts=from_ts, to_ts=to_ts)
-            post += f"🐶 DD Logs:\n <{dd_tx_link}|TxID: {tx_id}>\n"
+            post += f"🐶 <{dd_tx_link}|TxID: {tx_id}>\n"
         for req_id in (request_ids or []):
             dd_req_link = DATADOG_REQUEST_ID_URL.format(id=req_id, from_ts=from_ts, to_ts=to_ts)
-            post += f"🐶 DD Logs:\n <{dd_req_link}|RequestID: {req_id}>\n"
+            post += f"🐶 <{dd_req_link}|RequestID: {req_id}>\n"
 
     return post
