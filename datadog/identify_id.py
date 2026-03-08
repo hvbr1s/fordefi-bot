@@ -43,7 +43,6 @@ def extract_org_id(log):
 
 
 def resolve_org_name(logs_api, org_id, start, end):
-    """Query Datadog for a log that has both the org ID and a human-readable name."""
     request = LogsListRequest(
         filter=LogsQueryFilter(
             _from=start,
