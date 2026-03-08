@@ -42,6 +42,23 @@ def extract_org_id(log):
     )
 
 
+def resolve_org_name(logs_api, org_id, start, end):
+    """Query Datadog for a log that has both the org ID and a human-readable name."""
+    request = LogsListRequest(
+        filter=LogsQueryFilter(
+            _from=start,
+            to=end,
+            query=f"@organization.id:{org_id} @organization.name:*",
+        ),
+        page=LogsListRequestPage(limit=1),
+    )
+    response = logs_api.list_logs(body=request)
+    if response.data:
+        attrs = response.data[0].attributes.attributes or {}
+        return attrs.get("organization", {}).get("name")
+    return None
+
+
 def identify_uuid(uuid):
     config = create_config()
     end_time = datetime.now()
@@ -57,6 +74,7 @@ def identify_uuid(uuid):
 
     results = {}
     org_id = None
+    org_name = None
     with ApiClient(config) as client:
         logs_api = LogsApi(client)
         for attr, label in attributes.items():
@@ -68,6 +86,9 @@ def identify_uuid(uuid):
                     org_id = extract_org_id(log)
             else:
                 print(f"  MISS   {attr}")
+
+        if org_id:
+            org_name = resolve_org_name(logs_api, org_id, start, end)
 
     is_request = results["request_id"]
     is_transaction = results["transaction_id"]
@@ -81,4 +102,4 @@ def identify_uuid(uuid):
     else:
         id_type = "unknown"
 
-    return {"id_type": id_type, "organization_id": org_id}
+    return {"id_type": id_type, "organization_id": org_id, "organization_name": org_name}

@@ -4,7 +4,7 @@ LOOKBACK_DAYS = 2
 DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.xrequestid%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 
-async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None):
+async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None):
     processed_username = username.split('@')[0].strip()
 
     response = slack_client.conversations_info(channel=channel)
@@ -20,7 +20,8 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
 """
 
     if organization_id:
-        post += f"🏢 Organization ID: \n {organization_id}\n"
+        org_display = f"*{organization_name}* ({organization_id})" if organization_name else organization_id
+        post += f"🏢 Organization: \n {org_display}\n"
 
     if transaction_ids or request_ids:
         now = datetime.now()
