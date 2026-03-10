@@ -16,7 +16,7 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
     message_link = f"https://arnac.slack.com/archives/{channel}/p{ts.replace('.', '')}"
     post = f"""
 👨‍💻💬 *{processed_username.title()}* *({slack_friendly_channel_name.title()})*: _{query.strip().replace('\n', ' ')}_\n
-🔗 Link to Slack thread: {message_link}\n
+🔗 <{message_link}|Link to Slack thread>\n
 """
 
     if organization_id:
