@@ -20,7 +20,7 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
 """
 
     if organization_id:
-        org_display = f"*{organization_name}* ({organization_id})" if organization_name else organization_id
+        org_display = f"*{organization_name}*: {organization_id}" if organization_name else organization_id
         post += f"🏢 {org_display}\n"
 
     if transaction_ids or request_ids:
