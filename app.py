@@ -1,8 +1,10 @@
 import os
 import re
 import json
+import base64
 import asyncio
 import logging
+import httpx
 from datetime import datetime
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -44,6 +46,20 @@ signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
 bot_id = slack_client.auth_test()['user_id']
 processed_event_ids = set()
 
+async def download_slack_image(url: str) -> tuple[str, str]:
+    """Download image from Slack url_private, return (base64_data, media_type)."""
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            url,
+            headers={"Authorization": f"Bearer {SLACK_BOT_TOKEN}"},
+            follow_redirects=True
+        )
+        response.raise_for_status()
+        media_type = response.headers.get('content-type', 'image/png')
+        data = base64.b64encode(response.content).decode('utf-8')
+        return data, media_type
+
+
 class SlackEvent(BaseModel):
     type: str
     user: str
@@ -78,15 +94,28 @@ async def process_buffered_messages(message_key: str):
             return
 
     if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(message_buffer[message_key]) >= 5:
-        combined_text = " ".join(m['text'] for m in message_buffer[message_key])
-        combined_text = redact_emails(combined_text)
+        combined_text = " ".join(m['text'] for m in message_buffer[message_key] if m['text'])
+        combined_text = redact_emails(combined_text) if combined_text else ''
         msg_count = len(message_buffer[message_key])
         logger.info(f"Processing {msg_count} messages for {message_key}")
 
         event = message_buffer[message_key][0]['event']
         username = event.get('username')
 
-        bot_response = await ping_llm(combined_text)
+        # Download images from buffered messages
+        all_image_urls = []
+        for m in message_buffer[message_key]:
+            all_image_urls.extend(m.get('image_urls', []))
+
+        downloaded_images = []
+        for img_url in all_image_urls:
+            try:
+                b64_data, media_type = await download_slack_image(img_url)
+                downloaded_images.append((b64_data, media_type))
+            except Exception as e:
+                logger.error(f"Failed to download image: {img_url} | Error: {str(e)}")
+
+        bot_response = await ping_llm(combined_text, image_data=downloaded_images if downloaded_images else None)
 
         if isinstance(bot_response, str):
             logger.error(f"LLM error for {message_key}: {bot_response}")
@@ -107,14 +136,15 @@ async def process_buffered_messages(message_key: str):
             try:
                 result = await asyncio.to_thread(identify_uuid, uuid)
                 id_type = result.get("id_type", "unknown")
+                display_uuid = result.get("resolved_uuid") or uuid
                 if id_type in ("transaction_id", "both"):
-                    transaction_ids.append(uuid)
+                    transaction_ids.append(display_uuid)
                 if id_type in ("request_id", "both"):
-                    request_ids.append(uuid)
+                    request_ids.append(display_uuid)
                 if organization_id is None and result.get("organization_id"):
                     organization_id = result["organization_id"]
                     organization_name = result.get("organization_name")
-                logger.info(f"UUID classified | uuid={uuid} | type={id_type} | org_id={result.get('organization_id')} | org_name={result.get('organization_name')}")
+                logger.info(f"UUID classified | uuid={uuid} | resolved={display_uuid} | type={id_type} | org_id={result.get('organization_id')} | org_name={result.get('organization_name')}")
             except Exception as e:
                 logger.error(f"Datadog lookup failed for {uuid}: {str(e)}")
 
@@ -259,10 +289,15 @@ async def slack_events(request: Request):
         if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|@ThetcdDC|@Or0104|@itsamemario1988', user_name, re.IGNORECASE):
             return Response(status_code=200)
 
-        if not event.get('text'):
+        has_text = bool(event.get('text'))
+        has_images = any(
+            f.get('mimetype', '').startswith('image/')
+            for f in event.get('files', [])
+        )
+        if not has_text and not has_images:
             return Response(status_code=200)
 
-        user_text = event.get('text')
+        user_text = event.get('text', '')
         user_id = event.get('username')
         channel = event.get('channel')
 
@@ -270,10 +305,16 @@ async def slack_events(request: Request):
         channel_info = response["channel"]
         channel_name = channel_info["name"]
 
+        image_urls = [
+            f['url_private'] for f in event.get('files', [])
+            if f.get('mimetype', '').startswith('image/')
+        ]
+
         message_key = f"{channel}:{user_id}"
         arrival_time = datetime.now().timestamp()
         message_buffer[message_key].append({
             'text': user_text,
+            'image_urls': image_urls,
             'timestamp': arrival_time,
             'event': event,
             'channel_name': channel_name

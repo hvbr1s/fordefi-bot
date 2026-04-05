@@ -1,4 +1,5 @@
 import os
+import re
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from datadog_api_client import ApiClient, Configuration
@@ -11,6 +12,18 @@ load_dotenv()
 
 LOOKBACK_DAYS = 7
 
+UUID_FULL_PATTERN = re.compile(
+    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+)
+
+
+def prepare_uuid_query(uuid: str) -> str:
+    """If UUID is truncated, strip trailing dots/ellipsis and append wildcard for Datadog search."""
+    clean = uuid.rstrip('.').rstrip('…').strip()
+    if UUID_FULL_PATTERN.match(clean):
+        return clean
+    return f"{clean}*"
+
 
 def create_config():
     config = Configuration()
@@ -20,16 +33,35 @@ def create_config():
 
 
 def check_attribute(logs_api, attribute, uuid, start, end):
+    query_uuid = prepare_uuid_query(uuid)
     request = LogsListRequest(
         filter=LogsQueryFilter(
             _from=start,
             to=end,
-            query=f"{attribute}:{uuid}",
+            query=f"{attribute}:{query_uuid}",
         ),
         page=LogsListRequestPage(limit=1),
     )
     response = logs_api.list_logs(body=request)
     return response.data[0] if response.data else None
+
+
+def extract_full_uuid(log, attribute):
+    """Extract the full UUID value from a matched log entry."""
+    if not log or not hasattr(log.attributes, "attributes"):
+        return None
+    attrs = log.attributes.attributes or {}
+    # Strip the leading '@' from attribute name for dict lookup
+    key = attribute.lstrip('@')
+    # Handle nested keys like "http.request.xrequestid"
+    parts = key.split('.')
+    value = attrs
+    for part in parts:
+        if isinstance(value, dict):
+            value = value.get(part)
+        else:
+            return None
+    return value if isinstance(value, str) else None
 
 
 def extract_org_id(log):
@@ -72,6 +104,7 @@ def identify_uuid(uuid):
     }
 
     results = {}
+    resolved_uuid = None
     org_id = None
     org_name = None
     with ApiClient(config) as client:
@@ -81,6 +114,8 @@ def identify_uuid(uuid):
             results[label] = bool(log)
             if log:
                 print(f"  MATCH  {attr}")
+                if resolved_uuid is None:
+                    resolved_uuid = extract_full_uuid(log, attr)
                 if org_id is None:
                     org_id = extract_org_id(log)
             else:
@@ -101,4 +136,4 @@ def identify_uuid(uuid):
     else:
         id_type = "unknown"
 
-    return {"id_type": id_type, "organization_id": org_id, "organization_name": org_name}
+    return {"id_type": id_type, "resolved_uuid": resolved_uuid, "organization_id": org_id, "organization_name": org_name}
