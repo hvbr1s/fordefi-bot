@@ -24,9 +24,14 @@ async def prepare_prompt():
         - Is small talk or casual conversation
         - Is a response to another message without a new question
 
-        Additionally, extract any UUIDs present in the message (format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx).
+        Additionally, extract any UUIDs present in the message text OR visible in any attached screenshots/images.
+        UUIDs follow the format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (or partial/truncated versions).
         These may be Fordefi transaction IDs or API request IDs — you do not need to classify them,
         just extract the raw UUID values. If none are present, return an empty list.
+
+        IMPORTANT: Screenshots often show truncated UUIDs (e.g., "e47fd76c-e458-9f74..." or
+        "e47fd76c-e458-9f74"). Extract these exactly as visible — do NOT invent or guess missing characters.
+        Include truncated UUIDs in the "uuids" list as-is.
 
         Your response must be a JSON file with the following structure:
             {

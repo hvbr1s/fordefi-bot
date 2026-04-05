@@ -21,16 +21,35 @@ class Analysis(BaseModel):
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 model = "claude-opus-4-6" # smart, slow-ish
-fallback_model = "claude-haiku-4-5" # fastest, dumb
+fallback_model = "claude-sonnet-4-6" # fast, capable
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
-async def ping_llm(query):
-    logger.info(f"Starting LLM analysis | model={model}")
+def _build_content(query, image_data=None):
+    """Build multimodal content blocks for the Anthropic API."""
+    content = []
+    if query and query.strip():
+        content.append({"type": "text", "text": query.strip()})
+    for b64, media_type in (image_data or []):
+        content.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": media_type,
+                "data": b64
+            }
+        })
+    if not content:
+        content.append({"type": "text", "text": "(empty message)"})
+    return content
+
+
+async def ping_llm(query, image_data=None):
+    logger.info(f"Starting LLM analysis | model={model} | has_images={bool(image_data)}")
     prompt = await prepare_prompt()
+    content = _build_content(query, image_data)
     try:
         response = await instructor_client_anthropic.chat.completions.create(
                 model=model,
-                # betas=["effort-2025-11-24"],
                 response_model=Analysis,
                 temperature=0.0,
                 max_tokens=1024,
@@ -38,12 +57,9 @@ async def ping_llm(query):
                 messages=[
                     {
                         "role": "user",
-                        "content": query.strip(),
+                        "content": content,
                     }
                 ],
-                # output_config={
-                #     "effort": "medium"
-                # }
             )
         logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
         return response
@@ -60,7 +76,7 @@ async def ping_llm(query):
                     messages=[
                         {
                             "role": "user",
-                            "content": query.strip(),
+                            "content": content,
                         }
                     ],
                 )
