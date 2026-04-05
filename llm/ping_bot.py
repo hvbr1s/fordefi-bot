@@ -21,7 +21,7 @@ class Analysis(BaseModel):
 
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 model = "claude-opus-4-6" # smart, slow-ish
-fallback_model = "claude-haiku-4-5" # fastest, dumb
+fallback_model = "claude-sonnet-4-6" # fast, capable
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 def _build_content(query, image_data=None):
