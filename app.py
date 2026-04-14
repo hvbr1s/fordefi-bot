@@ -46,6 +46,8 @@ signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
 bot_id = slack_client.auth_test()['user_id']
 processed_event_ids = set()
 
+ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+
 async def download_slack_image(url: str) -> tuple[str, str]:
     """Download image from Slack url_private, return (base64_data, media_type)."""
     async with httpx.AsyncClient() as client:
@@ -55,7 +57,10 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             follow_redirects=True
         )
         response.raise_for_status()
-        media_type = response.headers.get('content-type', 'image/png')
+        raw_type = response.headers.get('content-type', 'image/png')
+        media_type = raw_type.split(';')[0].strip().lower()
+        if media_type not in ALLOWED_IMAGE_TYPES:
+            media_type = 'image/png'
         data = base64.b64encode(response.content).decode('utf-8')
         return data, media_type
 
