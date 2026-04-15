@@ -1,10 +1,12 @@
 import os
 import re
+import io
 import json
 import httpx
 import base64
 import asyncio
 import logging
+from PIL import Image
 from datetime import datetime
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -46,9 +48,40 @@ bot_id = slack_client.auth_test()['user_id']
 processed_event_ids = set()
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+MAX_IMAGE_DIMENSION = 8000
+MAX_INPUT_DIMENSION = 16000  # hard cap on input before decompression (DoS guard)
+
+
+class _ImageTooLargeError(Exception):
+    """Raised when an input image's declared dimensions exceed the safety cap."""
+
+
+def _normalize_image_bytes(raw: bytes) -> bytes:
+    """Re-encode an image as PNG via Pillow to strip Telegram compression
+    metadata/encoding quirks that Anthropic rejects with 'Could not process image'.
+    Also downsizes anything over Anthropic's 8000px limit, and rejects inputs
+    larger than MAX_INPUT_DIMENSION before decompression to prevent bomb DoS."""
+    with Image.open(io.BytesIO(raw)) as img:
+        # Header-only dimension check — Image.open() does NOT decompress pixels yet.
+        w, h = img.size
+        if w > MAX_INPUT_DIMENSION or h > MAX_INPUT_DIMENSION:
+            raise _ImageTooLargeError(
+                f"image dimensions {w}x{h} exceed safety cap {MAX_INPUT_DIMENSION}px"
+            )
+        img.load()
+        if getattr(img, "is_animated", False):
+            img.seek(0)
+        if img.mode not in ("RGB", "RGBA", "L"):
+            img = img.convert("RGBA" if "A" in img.mode else "RGB")
+        if max(img.size) > MAX_IMAGE_DIMENSION:
+            img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+
 
 async def download_slack_image(url: str) -> tuple[str, str]:
-    """Download image from Slack url_private, return (base64_data, media_type)."""
+    """Download image from Slack url_private, normalize via Pillow, return (base64_png, 'image/png')."""
     async with httpx.AsyncClient() as client:
         response = await client.get(
             url,
@@ -56,12 +89,22 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             follow_redirects=True
         )
         response.raise_for_status()
-        raw_type = response.headers.get('content-type', 'image/png')
-        media_type = raw_type.split(';')[0].strip().lower()
-        if media_type not in ALLOWED_IMAGE_TYPES:
-            media_type = 'image/png'
-        data = base64.b64encode(response.content).decode('utf-8')
-        return data, media_type
+        try:
+            normalized = await asyncio.to_thread(_normalize_image_bytes, response.content)
+        except _ImageTooLargeError as e:
+            # Don't fall back to raw — the raw bytes ARE the bomb. Let caller skip this image.
+            logger.error(f"Image rejected as too large | url={url} | {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Image normalization failed, falling back to raw bytes | url={url} | error={str(e)}")
+            raw_type = response.headers.get('content-type', 'image/png')
+            media_type = raw_type.split(';')[0].strip().lower()
+            if media_type not in ALLOWED_IMAGE_TYPES:
+                media_type = 'image/png'
+            data = base64.b64encode(response.content).decode('utf-8')
+            return data, media_type
+        data = base64.b64encode(normalized).decode('utf-8')
+        return data, 'image/png'
 
 
 class SlackEvent(BaseModel):
