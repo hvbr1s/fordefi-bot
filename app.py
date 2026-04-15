@@ -1,23 +1,22 @@
 import os
 import re
 import json
+import httpx
 import base64
 import asyncio
 import logging
-import httpx
 from datetime import datetime
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from slack_sdk import WebClient
 from llm.ping_bot import ping_llm
-from typing import Any, Optional, List
 from collections import defaultdict
 #from thena.create_ticket import thena
+from typing import Any, Optional, List
 from datadog.identify_id import identify_uuid
-from fastapi.responses import FileResponse
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
-from fastapi import FastAPI, Request, Response, Header, HTTPException
+from fastapi import FastAPI, Request, Response
 
 load_dotenv()
 
@@ -239,29 +238,6 @@ def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: 
 async def health_check():
     return {"status": "OK"}
 
-@app.get("/admin/logs")
-async def download_logs(authorization: str = Header(None)):
-    if not ADMIN_AUTH_KEY:
-        logger.error("ADMIN_AUTH_KEY not configured")
-        raise HTTPException(status_code=500, detail="Admin auth not configured")
-
-    if authorization != ADMIN_AUTH_KEY:
-        logger.warning("Unauthorized admin access attempt")
-        raise HTTPException(status_code=401, detail="Unauthorized")
-
-    log_file = "/disk/data/request_logs.json"
-
-    if not os.path.exists(log_file):
-        logger.info("Log file not found, returning empty array")
-        return []
-
-    logger.info("Admin logs download requested")
-    return FileResponse(
-        path=log_file,
-        filename="request_logs.json",
-        media_type="application/json"
-    )
-
 @app.post("/")
 async def slack_events(request: Request):
     body_bytes = await request.body()
@@ -291,7 +267,7 @@ async def slack_events(request: Request):
             return Response(status_code=200)
 
         user_name = event.get('username', '')
-        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|poluy|dean|telebot|@jacobgzx|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|@ThetcdDC|@Or0104|@itsamemario1988', user_name, re.IGNORECASE):
+        if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|telebot|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|@ThetcdDC|@Or0104|@itsamemario1988|@ShanySheves', user_name, re.IGNORECASE):
             return Response(status_code=200)
 
         has_text = bool(event.get('text'))
