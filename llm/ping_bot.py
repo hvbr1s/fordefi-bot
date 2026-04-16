@@ -1,8 +1,7 @@
 import os
 import logging
 import instructor
-from typing import List
-from pydantic import BaseModel
+from classes import Analysis
 from anthropic import AsyncAnthropic
 from llm.system import prepare_prompt
 
@@ -13,15 +12,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class Analysis(BaseModel):
-    customer_query: str
-    query_summary: str
-    urgency: str
-    uuids: List[str]
-
 client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-opus-4-6" # smart, slow-ish
-fallback_model = "claude-sonnet-4-6" # fast, capable
+model = "claude-opus-4-7" # smart, slow-ish
+fallback_model = "claude-sonnet-4-6" # fast, capable?
 instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
 
 def _build_content(query, image_data=None):
