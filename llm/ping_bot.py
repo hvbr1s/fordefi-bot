@@ -33,6 +33,11 @@ def _build_content(query, image_data=None):
         })
     if not content:
         content.append({"type": "text", "text": "(empty message)"})
+    img_blocks = [b for b in content if b.get("type") == "image"]
+    for i, blk in enumerate(img_blocks):
+        src = blk["source"]
+        b64 = src["data"]
+        logger.info(f"Image block {i} | media_type={src['media_type']} | b64_length={len(b64)} | b64_prefix={b64[:20]}...")
     return content
 
 
@@ -56,7 +61,11 @@ async def ping_llm(query, image_data=None):
         logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
         return response
     except Exception as e:
-        logger.error(f"LLM analysis failed | model={model} | error={str(e)}")
+        logger.error(f"LLM analysis failed | model={model} | error_type={type(e).__name__} | error={str(e)}")
+        if hasattr(e, 'response'):
+            logger.error(f"API response | status={getattr(e.response, 'status_code', 'N/A')} | body={getattr(e.response, 'text', 'N/A')[:500]}")
+        if hasattr(e, 'body'):
+            logger.error(f"API error body | {e.body}")
         try:
             logger.info(f"Attempting fallback | model={fallback_model}")
             response = await instructor_client_anthropic.chat.completions.create(
@@ -74,7 +83,11 @@ async def ping_llm(query, image_data=None):
             logger.info(f"Fallback analysis complete | model={fallback_model} | customer_query={response.customer_query} | urgency={response.urgency}")
             return response
         except Exception as e:
-            logger.error(f"Fallback analysis failed | model={fallback_model} | error={str(e)}")
+            logger.error(f"Fallback analysis failed | model={fallback_model} | error_type={type(e).__name__} | error={str(e)}")
+            if hasattr(e, 'response'):
+                logger.error(f"Fallback API response | status={getattr(e.response, 'status_code', 'N/A')} | body={getattr(e.response, 'text', 'N/A')[:500]}")
+            if hasattr(e, 'body'):
+                logger.error(f"Fallback API error body | {e.body}")
             logger.warning("Returning default error response")
             return Analysis(
                 customer_query="NO",

@@ -81,6 +81,7 @@ def _normalize_image_bytes(raw: bytes) -> tuple[bytes, str]:
         if max(img.size) > MAX_API_IMAGE_DIMENSION:
             img.thumbnail((MAX_API_IMAGE_DIMENSION, MAX_API_IMAGE_DIMENSION), Image.LANCZOS)
 
+        logger.info(f"Normalizing image | raw_size={len(raw)} | mode={img.mode} | dimensions={img.size[0]}x{img.size[1]} | format={fmt} | has_alpha={has_alpha}")
         # Encode, then progressively shrink if output exceeds API limit
         for attempt in range(4):
             buf = io.BytesIO()
@@ -107,6 +108,11 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             follow_redirects=True
         )
         response.raise_for_status()
+        resp_ct = response.headers.get('content-type', 'unknown')
+        resp_len = len(response.content)
+        logger.info(f"Slack image downloaded | url={url} | status={response.status_code} | content_type={resp_ct} | content_length={resp_len}")
+        if 'text/html' in resp_ct or resp_len < 100:
+            logger.error(f"Slack returned non-image response | content_type={resp_ct} | content_length={resp_len} | first_100_bytes={response.content[:100]!r}")
         try:
             normalized, media_type = await asyncio.to_thread(_normalize_image_bytes, response.content)
         except ImageTooLargeError as e:
@@ -119,8 +125,10 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             if media_type not in ALLOWED_IMAGE_TYPES:
                 media_type = 'image/png'
             data = base64.b64encode(response.content).decode('utf-8')
+            logger.warning(f"Using raw (unnormalized) image | url={url} | media_type={media_type} | raw_size={len(response.content)} | b64_len={len(data)}")
             return data, media_type
         data = base64.b64encode(normalized).decode('utf-8')
+        logger.info(f"Image normalized OK | url={url} | media_type={media_type} | normalized_size={len(normalized)} | b64_len={len(data)}")
         return data, media_type
         
 async def should_process_buffer(message_key) -> bool:
