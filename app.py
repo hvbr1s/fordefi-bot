@@ -111,8 +111,11 @@ async def download_slack_image(url: str) -> tuple[str, str]:
         resp_ct = response.headers.get('content-type', 'unknown')
         resp_len = len(response.content)
         logger.info(f"Slack image downloaded | url={url} | status={response.status_code} | content_type={resp_ct} | content_length={resp_len}")
-        if 'text/html' in resp_ct or resp_len < 100:
-            logger.error(f"Slack returned non-image response | content_type={resp_ct} | content_length={resp_len} | first_100_bytes={response.content[:100]!r}")
+        if b'<!DOCTYPE' in response.content[:50] or b'<html' in response.content[:50] or 'text/html' in resp_ct:
+            logger.error(f"Slack returned HTML instead of image | url={url} | content_type={resp_ct} | content_length={resp_len} | first_200_bytes={response.content[:200]!r}")
+            raise ValueError(f"Slack returned HTML instead of image for {url}")
+        if resp_len < 100:
+            logger.error(f"Slack returned suspiciously small response | url={url} | content_type={resp_ct} | content_length={resp_len}")
         try:
             normalized, media_type = await asyncio.to_thread(_normalize_image_bytes, response.content)
         except ImageTooLargeError as e:
@@ -120,6 +123,8 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             raise
         except Exception as e:
             logger.error(f"Image normalization failed, falling back to raw bytes | url={url} | error={str(e)}")
+            if b'<!DOCTYPE' in response.content[:50] or b'<html' in response.content[:50]:
+                raise ValueError(f"Downloaded content is HTML, not an image: {url}")
             raw_type = response.headers.get('content-type', 'image/png')
             media_type = raw_type.split(';')[0].strip().lower()
             if media_type not in ALLOWED_IMAGE_TYPES:
