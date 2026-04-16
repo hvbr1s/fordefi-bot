@@ -9,10 +9,10 @@ import logging
 from PIL import Image
 from datetime import datetime
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from slack_sdk import WebClient
 from llm.ping_bot import ping_llm
 from collections import defaultdict
+from classes import ImageTooLargeError
 #from thena.create_ticket import thena
 from typing import Any, Optional, List
 from datadog.identify_id import identify_uuid
@@ -48,40 +48,58 @@ bot_id = slack_client.auth_test()['user_id']
 processed_event_ids = set()
 
 ALLOWED_IMAGE_TYPES = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
-MAX_IMAGE_DIMENSION = 8000
+MAX_API_IMAGE_DIMENSION = 1568   # Anthropic recommended max long-edge (avoids server-side resize)
+MAX_API_IMAGE_BYTES = 5 * 1024 * 1024  # 5 MB hard API limit
 MAX_INPUT_DIMENSION = 16000  # hard cap on input before decompression (DoS guard)
 
-
-class _ImageTooLargeError(Exception):
-    """Raised when an input image's declared dimensions exceed the safety cap."""
-
-
-def _normalize_image_bytes(raw: bytes) -> bytes:
-    """Re-encode an image as PNG via Pillow to strip Telegram compression
-    metadata/encoding quirks that Anthropic rejects with 'Could not process image'.
-    Also downsizes anything over Anthropic's 8000px limit, and rejects inputs
-    larger than MAX_INPUT_DIMENSION before decompression to prevent bomb DoS."""
+def _normalize_image_bytes(raw: bytes) -> tuple[bytes, str]:
+    """Re-encode an image via Pillow to strip metadata/encoding quirks that
+    Anthropic rejects with 'Could not process image'.
+    Returns (image_bytes, media_type).
+    - Downsizes to 1568px long-edge (API recommended max — avoids server-side resize).
+    - Uses JPEG for opaque images (much smaller); PNG only when transparency is needed.
+    - Progressively shrinks if the encoded output still exceeds the 5 MB API limit.
+    - Rejects inputs larger than MAX_INPUT_DIMENSION before decompression (DoS guard)."""
     with Image.open(io.BytesIO(raw)) as img:
-        # Header-only dimension check — Image.open() does NOT decompress pixels yet.
         w, h = img.size
         if w > MAX_INPUT_DIMENSION or h > MAX_INPUT_DIMENSION:
-            raise _ImageTooLargeError(
+            raise ImageTooLargeError(
                 f"image dimensions {w}x{h} exceed safety cap {MAX_INPUT_DIMENSION}px"
             )
         img.load()
         if getattr(img, "is_animated", False):
             img.seek(0)
-        if img.mode not in ("RGB", "RGBA", "L"):
-            img = img.convert("RGBA" if "A" in img.mode else "RGB")
-        if max(img.size) > MAX_IMAGE_DIMENSION:
-            img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.LANCZOS)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG", optimize=True)
-        return buf.getvalue()
+
+        has_alpha = img.mode in ("RGBA", "LA", "PA") or "transparency" in img.info
+        if has_alpha:
+            img = img.convert("RGBA")
+            fmt, media_type = "PNG", "image/png"
+        else:
+            img = img.convert("RGB")
+            fmt, media_type = "JPEG", "image/jpeg"
+
+        if max(img.size) > MAX_API_IMAGE_DIMENSION:
+            img.thumbnail((MAX_API_IMAGE_DIMENSION, MAX_API_IMAGE_DIMENSION), Image.LANCZOS)
+
+        # Encode, then progressively shrink if output exceeds API limit
+        for attempt in range(4):
+            buf = io.BytesIO()
+            if fmt == "JPEG":
+                img.save(buf, format="JPEG", quality=85, optimize=True)
+            else:
+                img.save(buf, format="PNG", optimize=True)
+            data = buf.getvalue()
+            if len(data) <= MAX_API_IMAGE_BYTES:
+                return data, media_type
+            # Shrink by 50% and retry
+            img = img.resize((img.width // 2, img.height // 2), Image.LANCZOS)
+            logger.warning(f"Image too large ({len(data)} bytes), resizing to {img.width}x{img.height}")
+
+        return data, media_type
 
 
 async def download_slack_image(url: str) -> tuple[str, str]:
-    """Download image from Slack url_private, normalize via Pillow, return (base64_png, 'image/png')."""
+    """Download image from Slack url_private, normalize via Pillow, return (base64_data, media_type)."""
     async with httpx.AsyncClient() as client:
         response = await client.get(
             url,
@@ -90,9 +108,8 @@ async def download_slack_image(url: str) -> tuple[str, str]:
         )
         response.raise_for_status()
         try:
-            normalized = await asyncio.to_thread(_normalize_image_bytes, response.content)
-        except _ImageTooLargeError as e:
-            # Don't fall back to raw — the raw bytes ARE the bomb. Let caller skip this image.
+            normalized, media_type = await asyncio.to_thread(_normalize_image_bytes, response.content)
+        except ImageTooLargeError as e:
             logger.error(f"Image rejected as too large | url={url} | {str(e)}")
             raise
         except Exception as e:
@@ -104,14 +121,7 @@ async def download_slack_image(url: str) -> tuple[str, str]:
             data = base64.b64encode(response.content).decode('utf-8')
             return data, media_type
         data = base64.b64encode(normalized).decode('utf-8')
-        return data, 'image/png'
-
-
-class SlackEvent(BaseModel):
-    type: str
-    user: str
-    text: str
-    channel: str
+        return data, media_type
         
 async def should_process_buffer(message_key) -> bool:
     if not message_buffer[message_key]:
