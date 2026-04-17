@@ -1,16 +1,16 @@
 from datetime import datetime, timedelta
 from datadog.identify_id import prepare_uuid_query
+from slack_post.channel_cache import get_channel_name
 
 LOOKBACK_DAYS = 2
 DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.xrequestid%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 
-async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None):
+async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None, channel_name=None):
     processed_username = username.split('@')[0].strip()
 
-    response = slack_client.conversations_info(channel=channel)
-    channel_info = response["channel"]
-    channel_name = channel_info["name"]
+    if channel_name is None:
+        channel_name = get_channel_name(slack_client, channel)
     channel_parts = channel_name.split('-')
     slack_friendly_channel_name = '-'.join(channel_parts[1:]) if len(channel_parts) > 1 else channel_name
 
