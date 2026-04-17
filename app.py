@@ -168,48 +168,47 @@ async def download_slack_image(url: str) -> tuple[str, str]:
         logger.info(f"Image normalized OK | url={url} | media_type={media_type} | normalized_size={len(normalized)} | b64_len={len(data)}")
         return data, media_type
         
-async def should_process_buffer(message_key) -> bool:
-    if not message_buffer[message_key]:
-        return False
-
-    earliest_msg_time = message_buffer[message_key][0]['timestamp']
-    current_time = datetime.now().timestamp()
-
-    should_process = (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or \
-                     len(message_buffer[message_key]) >= 5
-    return should_process
+BATCH_SIZE_TRIGGER = 5
 
 async def process_buffered_messages(message_key: str):
-    if message_key not in message_buffer or not message_buffer[message_key]:
+    pending = message_buffer.pop(message_key, None)
+    if not pending:
         return
 
-    earliest_msg_time = message_buffer[message_key][0]['timestamp']
+    earliest_msg_time = pending[0]['timestamp']
     current_time = datetime.now().timestamp()
-    channel = message_buffer[message_key][0]['event'].get('channel')
+    channel = pending[0]['event'].get('channel')
 
     if channel in channel_last_processed:
         time_since_last_process = current_time - channel_last_processed[channel]
         if time_since_last_process < CHANNEL_COOLDOWN:
             remaining_cooldown = CHANNEL_COOLDOWN - time_since_last_process
-            logger.info(f"Channel {channel} in cooldown: {remaining_cooldown:.0f}s remaining | Buffer cleared")
-            del message_buffer[message_key]
+            dropped_users = sorted({m['event'].get('username', '?') for m in pending})
+            preview = " | ".join(
+                redact_emails((m['text'] or '').strip().replace('\n', ' '))[:80]
+                for m in pending if m.get('text')
+            )[:400]
+            logger.warning(
+                "Channel %s in cooldown: %.0fs remaining | Dropping %d buffered message(s) | users=%s | preview=%r",
+                channel, remaining_cooldown, len(pending), dropped_users, preview,
+            )
             return
 
-    if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(message_buffer[message_key]) >= 5:
-        combined_text = " ".join(m['text'] for m in message_buffer[message_key] if m['text'])
+    if (current_time - earliest_msg_time) >= BUFFER_TIMEOUT or len(pending) >= BATCH_SIZE_TRIGGER:
+        combined_text = " ".join(m['text'] for m in pending if m['text'])
         combined_text = redact_emails(combined_text) if combined_text else ''
-        msg_count = len(message_buffer[message_key])
+        msg_count = len(pending)
         logger.info(f"Processing {msg_count} messages for {message_key}")
 
-        event = message_buffer[message_key][0]['event']
+        event = pending[0]['event']
         username = next(
-            (m['event'].get('username') for m in message_buffer[message_key] if m['event'].get('username')),
+            (m['event'].get('username') for m in pending if m['event'].get('username')),
             event.get('username')
         )
 
         # Download images from buffered messages
         all_image_urls = []
-        for m in message_buffer[message_key]:
+        for m in pending:
             all_image_urls.extend(m.get('image_urls', []))
 
         downloaded_images = []
@@ -224,7 +223,6 @@ async def process_buffered_messages(message_key: str):
 
         if isinstance(bot_response, str):
             logger.error(f"LLM error for {message_key}: {bot_response}")
-            del message_buffer[message_key]
             return
 
         analysis = (bot_response.customer_query).lower().strip()
@@ -254,7 +252,7 @@ async def process_buffered_messages(message_key: str):
                 logger.error(f"Datadog lookup failed for {uuid}: {str(e)}")
 
         if analysis == "yes":
-            channel_name = message_buffer[message_key][0].get('channel_name', '')
+            channel_name = pending[0].get('channel_name', '')
             display_channel = channel_name.removeprefix('fordefi-') if channel_name else ''
             log_request(urgency, summary, display_channel, transaction_ids, request_ids, organization_id)
             channel_last_processed[channel] = current_time
@@ -285,18 +283,48 @@ async def process_buffered_messages(message_key: str):
         else:
             logger.info(f"Not a customer query | Channel: {channel} | Summary: {summary}")
 
-        del message_buffer[message_key]
+flush_events: dict[str, asyncio.Event] = {}
+
+async def _run_and_cleanup(message_key: str, delay: float, flush_event: asyncio.Event):
+    try:
+        if delay > 0:
+            try:
+                await asyncio.wait_for(flush_event.wait(), timeout=delay)
+            except asyncio.TimeoutError:
+                pass
+        await process_buffered_messages(message_key)
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # The in-flight batch was already popped inside process_buffered_messages,
+        # so it's lost to this crash. Any messages still under message_buffer[key]
+        # arrived during processing and must be preserved for the finally block
+        # below to reschedule.
+        logger.exception(f"Unhandled error processing buffer | key={message_key}")
+    finally:
+        timers.pop(message_key, None)
+        flush_events.pop(message_key, None)
+        # Messages may have arrived during processing (after we popped the
+        # buffer snapshot). If so, schedule another pass so they aren't
+        # orphaned waiting for the next unrelated event.
+        if message_buffer.get(message_key):
+            await schedule_processing(message_key)
 
 async def schedule_processing(message_key: str):
     if message_key in timers:
         return
+    flush_event = asyncio.Event()
+    flush_events[message_key] = flush_event
+    timers[message_key] = asyncio.create_task(
+        _run_and_cleanup(message_key, BUFFER_TIMEOUT, flush_event)
+    )
 
-    async def delayed_check():
-        await asyncio.sleep(BUFFER_TIMEOUT)
-        await process_buffered_messages(message_key)
-        timers.pop(message_key, None)
-
-    timers[message_key] = asyncio.create_task(delayed_check())
+def request_early_flush(message_key: str) -> None:
+    """Wake the pending sleep so the processor runs now. No-op if the
+    processor has already started or the timer has completed."""
+    ev = flush_events.get(message_key)
+    if ev is not None:
+        ev.set()
 
 def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
@@ -353,23 +381,36 @@ async def slack_events(request: Request):
         return {"challenge": body.get("challenge")}
 
     event = body.get('event', {})
-    event_id = event.get('event_ts')
+    event_id = body.get('event_id') or event.get('event_ts')
 
-    if event_id in processed_event_ids:
+    if event_id and event_id in processed_event_ids:
         return Response(status_code=200)
-    processed_event_ids.add(event_id)
+    if event_id:
+        processed_event_ids.add(event_id)
 
+    try:
+        await _handle_event(event)
+    except Exception:
+        if event_id:
+            processed_event_ids.discard(event_id)
+        logger.exception("Event handling failed; returning 500 so Slack retries")
+        return Response(status_code=500)
+
+    return Response(status_code=200)
+
+
+async def _handle_event(event: dict):
     if event and event.get('type'):
         if event.get('user') == bot_id:
-            return Response(status_code=200)
+            return
 
         ignored_subtypes = ['channel_join', 'message_changed', 'message_deleted']
         if event.get('subtype') in ignored_subtypes:
-            return Response(status_code=200)
+            return
 
         user_name = event.get('username', '')
         if re.search(r'@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|@joshschwartz|telebot|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|@ThetcdDC|@Or0104|@itsamemario1988|@ShanySheves', user_name, re.IGNORECASE):
-            return Response(status_code=200)
+            return
 
         has_text = bool(event.get('text'))
         has_images = any(
@@ -377,7 +418,7 @@ async def slack_events(request: Request):
             for f in event.get('files', [])
         )
         if not has_text and not has_images:
-            return Response(status_code=200)
+            return
 
         user_text = event.get('text', '')
         user_id = event.get('username')
@@ -393,18 +434,13 @@ async def slack_events(request: Request):
         ]
 
         # Threaded events key on thread_ts so separate threads never merge.
-        # Top-level events fall back to channel-wide reuse so the TG bridge's
-        # text + file_share split (different usernames) lands in one batch.
+        # Top-level events key on (channel, user) so concurrent conversations
+        # from different users stay isolated.
         thread_ts_key = event.get('thread_ts')
         if thread_ts_key:
             message_key = f"{channel}:thread:{thread_ts_key}"
         else:
-            top_prefix = f"{channel}:top:"
-            existing_key = next(
-                (k for k in message_buffer if k.startswith(top_prefix) and k in timers),
-                None,
-            )
-            message_key = existing_key or f"{top_prefix}{user_id}"
+            message_key = f"{channel}:top:{user_id}"
         arrival_time = datetime.now().timestamp()
         message_buffer[message_key].append({
             'text': user_text,
@@ -418,7 +454,10 @@ async def slack_events(request: Request):
         logger.info(f"Message buffered | Channel: {channel_name} | User: {user_id} | Key: {message_key} | Buffer size: {buffer_size}")
 
         await schedule_processing(message_key)
+        if buffer_size >= BATCH_SIZE_TRIGGER:
+            logger.info(f"Batch size trigger hit ({buffer_size}) | flushing {message_key} early")
+            request_early_flush(message_key)
 
-        return Response(status_code=200)
+        return
 
-    return Response(status_code=200)
+    return
