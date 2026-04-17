@@ -36,17 +36,13 @@ EVENT_ID_FLUSH_TZ = ZoneInfo("Europe/Berlin")
 EVENT_ID_FLUSH_INTERVAL_DAYS = 14
 PROCESSED_EVENT_IDS_MAX = 20_000
 
-# Default allowlist preserved inline so tests and existing deployments keep
-# working without env-var plumbing; override via INTERNAL_USERS_REGEX.
-DEFAULT_INTERNAL_USERS_REGEX = (
-    r"@DeanKuchel|fordefi|@hvbris|@dimakogan1|@michaelpoluy|@Ancientfish|"
-    r"@joshschwartz|telebot|@aprilXluo|@mlfigueroa89|@BenFordefi|@fmonte2|"
-    r"@ThetcdDC|@Or0104|@itsamemario1988|@ShanySheves"
-)
-internal_users_pattern = re.compile(
-    os.getenv("INTERNAL_USERS_REGEX", DEFAULT_INTERNAL_USERS_REGEX),
-    re.IGNORECASE,
-)
+_internal_users_regex = os.getenv("INTERNAL_USERS_REGEX")
+if not _internal_users_regex:
+    raise RuntimeError(
+        "INTERNAL_USERS_REGEX is required but not set. "
+        "Add it to your .env (pipe-separated handles, e.g. '@alice|@bob|teambot')."
+    )
+internal_users_pattern = re.compile(_internal_users_regex, re.IGNORECASE)
 
 
 async def _flush_processed_event_ids_loop():
