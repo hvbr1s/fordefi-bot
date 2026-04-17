@@ -479,6 +479,9 @@ async def _handle_event(event: dict):
 
         channel_name = get_channel_name(slack_client, channel)
 
+        if channel_name == "sambot-ultimate":
+            logger.info(f"[debug sambot-ultimate] raw event: {json.dumps(event, default=str)}")
+
         image_urls = [
             f['url_private'] for f in event.get('files', [])
             if f.get('mimetype', '').startswith('image/')
