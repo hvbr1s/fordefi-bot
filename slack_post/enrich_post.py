@@ -7,7 +7,9 @@ DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.x
 DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 
 async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None, channel_name=None):
-    processed_username = username.split('@')[0].strip()
+    # Slack events occasionally arrive without a username (e.g. app-posted
+    # messages that omit the field); fall back so we don't crash the post.
+    processed_username = (username or "Unknown").split('@')[0].strip() or "Unknown"
 
     if channel_name is None:
         channel_name = get_channel_name(slack_client, channel)
