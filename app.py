@@ -7,7 +7,9 @@ import base64
 import asyncio
 import logging
 from PIL import Image
-from datetime import datetime
+from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from slack_sdk import WebClient
 from llm.ping_bot import ping_llm
@@ -29,7 +31,37 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+EVENT_ID_FLUSH_TZ = ZoneInfo("Europe/Berlin")
+EVENT_ID_FLUSH_INTERVAL_DAYS = 14
+
+
+async def _flush_processed_event_ids_loop():
+    """Clear processed_event_ids every other Saturday at 04:00 Europe/Berlin."""
+    last_flush: Optional[datetime] = None
+    while True:
+        now = datetime.now(EVENT_ID_FLUSH_TZ)
+        days_until_sat = (5 - now.weekday()) % 7
+        next_run = now.replace(hour=4, minute=0, second=0, microsecond=0) + timedelta(days=days_until_sat)
+        if next_run <= now:
+            next_run += timedelta(days=7)
+        await asyncio.sleep((next_run - now).total_seconds())
+        if last_flush is None or (datetime.now(EVENT_ID_FLUSH_TZ) - last_flush) >= timedelta(days=EVENT_ID_FLUSH_INTERVAL_DAYS - 1):
+            size = len(processed_event_ids)
+            processed_event_ids.clear()
+            last_flush = datetime.now(EVENT_ID_FLUSH_TZ)
+            logger.info(f"Flushed processed_event_ids | cleared={size}")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    flush_task = asyncio.create_task(_flush_processed_event_ids_loop())
+    try:
+        yield
+    finally:
+        flush_task.cancel()
+
+
+app = FastAPI(lifespan=lifespan)
 
 message_buffer = defaultdict(list)
 timers = {}
@@ -170,7 +202,10 @@ async def process_buffered_messages(message_key: str):
         logger.info(f"Processing {msg_count} messages for {message_key}")
 
         event = message_buffer[message_key][0]['event']
-        username = event.get('username')
+        username = next(
+            (m['event'].get('username') for m in message_buffer[message_key] if m['event'].get('username')),
+            event.get('username')
+        )
 
         # Download images from buffered messages
         all_image_urls = []
@@ -357,7 +392,19 @@ async def slack_events(request: Request):
             if f.get('mimetype', '').startswith('image/')
         ]
 
-        message_key = f"{channel}:{user_id}"
+        # Threaded events key on thread_ts so separate threads never merge.
+        # Top-level events fall back to channel-wide reuse so the TG bridge's
+        # text + file_share split (different usernames) lands in one batch.
+        thread_ts_key = event.get('thread_ts')
+        if thread_ts_key:
+            message_key = f"{channel}:thread:{thread_ts_key}"
+        else:
+            top_prefix = f"{channel}:top:"
+            existing_key = next(
+                (k for k in message_buffer if k.startswith(top_prefix) and k in timers),
+                None,
+            )
+            message_key = existing_key or f"{top_prefix}{user_id}"
         arrival_time = datetime.now().timestamp()
         message_buffer[message_key].append({
             'text': user_text,
@@ -368,7 +415,7 @@ async def slack_events(request: Request):
         })
 
         buffer_size = len(message_buffer[message_key])
-        logger.info(f"Message buffered | Channel: {channel_name} | User: {user_id} | Buffer size: {buffer_size}")
+        logger.info(f"Message buffered | Channel: {channel_name} | User: {user_id} | Key: {message_key} | Buffer size: {buffer_size}")
 
         await schedule_processing(message_key)
 
