@@ -244,7 +244,7 @@ async def process_buffered_messages(message_key: str):
     event = pending[0]['event']
     username = next(
         (m['event'].get('username') for m in pending if m['event'].get('username')),
-        event.get('username')
+        event.get('username') or event.get('user') or "Unknown"
     )
 
     # Download images from buffered messages
