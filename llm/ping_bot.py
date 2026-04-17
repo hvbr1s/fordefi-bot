@@ -1,4 +1,3 @@
-import os
 import logging
 import instructor
 from classes import Analysis
@@ -12,10 +11,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-model = "claude-opus-4-7" # smart, slow-ish
-fallback_model = "claude-sonnet-4-6" # fast, capable?
-instructor_client_anthropic = instructor.from_anthropic(AsyncAnthropic(), mode=instructor.Mode.ANTHROPIC_JSON)
+MODEL = "claude-opus-4-7"
+FALLBACK_MODEL = "claude-sonnet-4-6"
+MAX_TOKENS = 1024
+
+# Shared client with SDK-level retries for transient 429/5xx before we
+# escalate to the fallback model.
+instructor_client_anthropic = instructor.from_anthropic(
+    AsyncAnthropic(max_retries=2),
+    mode=instructor.Mode.ANTHROPIC_JSON,
+)
+
 
 def _build_content(query, image_data=None):
     """Build multimodal content blocks for the Anthropic API."""
@@ -28,70 +34,86 @@ def _build_content(query, image_data=None):
             "source": {
                 "type": "base64",
                 "media_type": media_type,
-                "data": b64
-            }
+                "data": b64,
+            },
         })
     if not content:
         content.append({"type": "text", "text": "(empty message)"})
-    img_blocks = [b for b in content if b.get("type") == "image"]
-    for i, blk in enumerate(img_blocks):
+    for i, blk in enumerate(b for b in content if b.get("type") == "image"):
         src = blk["source"]
         b64 = src["data"]
-        logger.info(f"Image block {i} | media_type={src['media_type']} | b64_length={len(b64)} | b64_prefix={b64[:20]}...")
+        logger.info(
+            f"Image block {i} | media_type={src['media_type']} | "
+            f"b64_length={len(b64)} | b64_prefix={b64[:20]}..."
+        )
     return content
 
 
+def _system_blocks(prompt: str):
+    # cache_control keeps the system prompt in Anthropic's prompt cache
+    # across calls, cutting per-request cost dramatically.
+    return [{"type": "text", "text": prompt, "cache_control": {"type": "ephemeral"}}]
+
+
+async def _call_model(model: str, system_blocks, content):
+    return await instructor_client_anthropic.chat.completions.create(
+        model=model,
+        response_model=Analysis,
+        max_tokens=MAX_TOKENS,
+        system=system_blocks,
+        messages=[{"role": "user", "content": content}],
+    )
+
+
+def _log_api_error(label: str, model: str, e: Exception) -> None:
+    logger.error(
+        f"{label} | model={model} | error_type={type(e).__name__} | error={str(e)}"
+    )
+    # Anthropic / httpx errors expose `response` and `body` at runtime; the
+    # base Exception class doesn't, so use getattr to keep the type checker
+    # happy without changing the logged output.
+    resp = getattr(e, "response", None)
+    if resp is not None:
+        body_text = getattr(resp, "text", "N/A")
+        logger.error(
+            f"{label} API response | "
+            f"status={getattr(resp, 'status_code', 'N/A')} | "
+            f"body={body_text[:500] if isinstance(body_text, str) else body_text}"
+        )
+    body = getattr(e, "body", None)
+    if body is not None:
+        logger.error(f"{label} API error body | {body}")
+
+
 async def ping_llm(query, image_data=None):
-    logger.info(f"Starting LLM analysis | model={model} | has_images={bool(image_data)}")
-    prompt = await prepare_prompt()
+    logger.info(f"Starting LLM analysis | model={MODEL} | has_images={bool(image_data)}")
+    prompt = prepare_prompt()
+    system_blocks = _system_blocks(prompt)
     content = _build_content(query, image_data)
+
     try:
-        response = await instructor_client_anthropic.chat.completions.create(
-                model=model,
-                response_model=Analysis,
-                max_tokens=1024,
-                system=prompt ,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": content,
-                    }
-                ],
-            )
-        logger.info(f"LLM analysis complete | model={model} | customer_query={response.customer_query} | urgency={response.urgency}")
+        response = await _call_model(MODEL, system_blocks, content)
+        logger.info(
+            f"LLM analysis complete | model={MODEL} | "
+            f"customer_query={response.customer_query} | urgency={response.urgency}"
+        )
         return response
-    except Exception as e:
-        logger.error(f"LLM analysis failed | model={model} | error_type={type(e).__name__} | error={str(e)}")
-        if hasattr(e, 'response'):
-            logger.error(f"API response | status={getattr(e.response, 'status_code', 'N/A')} | body={getattr(e.response, 'text', 'N/A')[:500]}")
-        if hasattr(e, 'body'):
-            logger.error(f"API error body | {e.body}")
+    except Exception as primary_err:
+        _log_api_error("LLM analysis failed", MODEL, primary_err)
         try:
-            logger.info(f"Attempting fallback | model={fallback_model}")
-            response = await instructor_client_anthropic.chat.completions.create(
-                    model=fallback_model,
-                    response_model=Analysis,
-                    max_tokens=1024,
-                    system=prompt ,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": content,
-                        }
-                    ],
-                )
-            logger.info(f"Fallback analysis complete | model={fallback_model} | customer_query={response.customer_query} | urgency={response.urgency}")
+            logger.info(f"Attempting fallback | model={FALLBACK_MODEL}")
+            response = await _call_model(FALLBACK_MODEL, system_blocks, content)
+            logger.info(
+                f"Fallback analysis complete | model={FALLBACK_MODEL} | "
+                f"customer_query={response.customer_query} | urgency={response.urgency}"
+            )
             return response
-        except Exception as e:
-            logger.error(f"Fallback analysis failed | model={fallback_model} | error_type={type(e).__name__} | error={str(e)}")
-            if hasattr(e, 'response'):
-                logger.error(f"Fallback API response | status={getattr(e.response, 'status_code', 'N/A')} | body={getattr(e.response, 'text', 'N/A')[:500]}")
-            if hasattr(e, 'body'):
-                logger.error(f"Fallback API error body | {e.body}")
+        except Exception as fallback_err:
+            _log_api_error("Fallback analysis failed", FALLBACK_MODEL, fallback_err)
             logger.warning("Returning default error response")
             return Analysis(
                 customer_query="NO",
                 query_summary="ERROR",
                 urgency="MEDIUM",
-                uuids=[]
+                uuids=[],
             )
