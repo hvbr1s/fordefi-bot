@@ -90,6 +90,15 @@ key_last_processed: dict[str, float] = {}
 BUFFER_TIMEOUT = 25
 PROCESSING_COOLDOWN = 3600
 
+# Telegram→Slack bridge (Telebot) posts text messages with the initiator
+# handle in `event.username`, but file_share events from the same bridge
+# drop that override and are authored as the bridge app itself. Cache the
+# last real username seen per (channel, bot_id) for a short window so a
+# handle-less file_share from the same sender can recover it.
+# Value: (username, timestamp).
+_recent_username_by_sender: dict[tuple[str, str], tuple[str, float]] = {}
+RECENT_USERNAME_TTL = 60
+
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
 THENA_AUTH_TOKEN = os.getenv("THENA_AUTH_TOKEN")
@@ -461,9 +470,16 @@ async def _handle_event(event: dict):
         if event.get('subtype') in ignored_subtypes:
             return
 
-        user_name = event.get('username', '')
-        if internal_users_pattern.search(user_name):
-            return
+        channel = event.get('channel')
+        raw_username = event.get('username', '')
+        sender_id = event.get('bot_id') or event.get('user')
+        now_ts = datetime.now().timestamp()
+
+        # Cache real usernames as early as possible — even if this event would
+        # otherwise be dropped — so the paired file_share that follows can
+        # recover the handle and be filtered or logged correctly.
+        if raw_username and channel and sender_id:
+            _recent_username_by_sender[(channel, sender_id)] = (raw_username, now_ts)
 
         has_text = bool(event.get('text'))
         has_images = any(
@@ -473,14 +489,21 @@ async def _handle_event(event: dict):
         if not has_text and not has_images:
             return
 
+        # Reuse a recent handle for bridge-posted file_shares that dropped
+        # their username override. Only same (channel, bot_id) within TTL.
+        effective_username = raw_username
+        if not raw_username and channel and sender_id:
+            cached = _recent_username_by_sender.get((channel, sender_id))
+            if cached and (now_ts - cached[1]) <= RECENT_USERNAME_TTL:
+                effective_username = cached[0]
+
+        if internal_users_pattern.search(effective_username):
+            return
+
         user_text = event.get('text', '')
-        user_id = event.get('username')
-        channel = event.get('channel')
+        user_id = effective_username or None
 
         channel_name = get_channel_name(slack_client, channel)
-
-        if channel_name == "sambot-ultimate":
-            logger.info(f"[debug sambot-ultimate] raw event: {json.dumps(event, default=str)}")
 
         image_urls = [
             f['url_private'] for f in event.get('files', [])
