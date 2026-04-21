@@ -3,6 +3,7 @@ import re
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 from datadog_api_client import ApiClient, Configuration
+from datadog_api_client.exceptions import ApiException
 from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
@@ -11,6 +12,16 @@ from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
 load_dotenv()
 
 LOOKBACK_DAYS = 7
+
+
+def list_logs_with_retry(logs_api, request):
+    try:
+        return logs_api.list_logs(body=request)
+    except ApiException as e:
+        if getattr(e, "status", None) != 408:
+            raise
+        print(f"  RETRY  Datadog 408 timeout, retrying once")
+        return logs_api.list_logs(body=request)
 
 UUID_FULL_PATTERN = re.compile(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
@@ -42,7 +53,7 @@ def check_attribute(logs_api, attribute, uuid, start, end):
         ),
         page=LogsListRequestPage(limit=1),
     )
-    response = logs_api.list_logs(body=request)
+    response = list_logs_with_retry(logs_api, request)
     return response.data[0] if response.data else None
 
 
@@ -83,7 +94,7 @@ def resolve_org_name(logs_api, org_id, start, end):
         ),
         page=LogsListRequestPage(limit=1),
     )
-    response = logs_api.list_logs(body=request)
+    response = list_logs_with_retry(logs_api, request)
     if response.data:
         attrs = response.data[0].attributes.attributes or {}
         return attrs.get("organization", {}).get("name")
