@@ -5,8 +5,9 @@ from slack_post.channel_cache import get_channel_name
 LOOKBACK_DAYS = 2
 DATADOG_REQUEST_ID_URL = "https://app.datadoghq.com/logs?query=%40http.request.xrequestid%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
 DATADOG_TRANSACTION_ID_URL = "https://app.datadoghq.com/logs?query=%40transaction_id%3A{id}&agg_m=count&agg_m_source=base&agg_t=count&clustering_pattern_field_path=message&cols=host%2Cservice&messageDisplay=inline&refresh_mode=sliding&storage=hot&stream_sort=desc&viz=stream&from_ts={from_ts}&to_ts={to_ts}&live=false"
+DATADOG_LOG_EVENT_URL = "https://app.datadoghq.com/logs?event={log_id}"
 
-async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None, channel_name=None):
+async def enrich_bot_post(username, query, channel, ts, slack_client, transaction_ids=None, request_ids=None, organization_id=None, organization_name=None, channel_name=None, payload_log_ids=None):
     # Slack events occasionally arrive without a username (e.g. app-posted
     # messages that omit the field); fall back so we don't crash the post.
     processed_username = (username or "Unknown").split('@')[0].strip() or "Unknown"
@@ -31,11 +32,18 @@ async def enrich_bot_post(username, query, channel, ts, slack_client, transactio
         to_ts = int(now.timestamp() * 1000)
         from_ts = int((now - timedelta(days=LOOKBACK_DAYS)).timestamp() * 1000)
 
+        payload_log_ids = payload_log_ids or {}
         for tx_id in (transaction_ids or []):
             dd_tx_link = DATADOG_TRANSACTION_ID_URL.format(id=prepare_uuid_query(tx_id), from_ts=from_ts, to_ts=to_ts)
             post += f"🐶 <{dd_tx_link}|TxID: {tx_id}>\n"
+            log_id = payload_log_ids.get(tx_id)
+            if log_id:
+                post += f"📦 <{DATADOG_LOG_EVENT_URL.format(log_id=log_id)}|TxPayload>\n"
         for req_id in (request_ids or []):
             dd_req_link = DATADOG_REQUEST_ID_URL.format(id=prepare_uuid_query(req_id), from_ts=from_ts, to_ts=to_ts)
             post += f"🐶 <{dd_req_link}|RequestID: {req_id}>\n"
+            log_id = payload_log_ids.get(req_id)
+            if log_id:
+                post += f"📦 <{DATADOG_LOG_EVENT_URL.format(log_id=log_id)}|TxPayload>\n"
 
     return post
