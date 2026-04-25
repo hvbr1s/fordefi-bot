@@ -8,6 +8,7 @@ from datadog_api_client.v2.api.logs_api import LogsApi
 from datadog_api_client.v2.model.logs_list_request import LogsListRequest
 from datadog_api_client.v2.model.logs_list_request_page import LogsListRequestPage
 from datadog_api_client.v2.model.logs_query_filter import LogsQueryFilter
+from datadog_api_client.v2.model.logs_sort import LogsSort
 
 load_dotenv()
 
@@ -85,6 +86,47 @@ def extract_org_id(log):
     )
 
 
+def find_first_log(logs_api, query, start, end):
+    request = LogsListRequest(
+        filter=LogsQueryFilter(_from=start, to=end, query=query),
+        sort=LogsSort.TIMESTAMP_ASCENDING,
+        page=LogsListRequestPage(limit=1),
+    )
+    response = list_logs_with_retry(logs_api, request)
+    return response.data[0] if response.data else None
+
+
+def resolve_payload_log_id(logs_api, id_type, resolved_uuid, start, end):
+    if id_type in ("request_id", "both"):
+        log = find_first_log(
+            logs_api,
+            f"@http.request.xrequestid:{resolved_uuid} service:bff",
+            start,
+            end,
+        )
+        return log.id if log else None
+    if id_type == "transaction_id":
+        org_log = find_first_log(
+            logs_api,
+            f"@transaction_id:{resolved_uuid} service:organization",
+            start,
+            end,
+        )
+        if not org_log:
+            return None
+        xreq = extract_full_uuid(org_log, "@http.request.xrequestid")
+        if not xreq:
+            return None
+        bff_log = find_first_log(
+            logs_api,
+            f"@http.request.xrequestid:{xreq} service:bff",
+            start,
+            end,
+        )
+        return bff_log.id if bff_log else None
+    return None
+
+
 def resolve_org_name(logs_api, org_id, start, end):
     request = LogsListRequest(
         filter=LogsQueryFilter(
@@ -135,16 +177,26 @@ def identify_uuid(uuid):
         if org_id:
             org_name = resolve_org_name(logs_api, org_id, start, end)
 
-    is_request = results["request_id"]
-    is_transaction = results["transaction_id"]
+        is_request = results["request_id"]
+        is_transaction = results["transaction_id"]
 
-    if is_request and is_transaction:
-        id_type = "both"
-    elif is_request:
-        id_type = "request_id"
-    elif is_transaction:
-        id_type = "transaction_id"
-    else:
-        id_type = "unknown"
+        if is_request and is_transaction:
+            id_type = "both"
+        elif is_request:
+            id_type = "request_id"
+        elif is_transaction:
+            id_type = "transaction_id"
+        else:
+            id_type = "unknown"
 
-    return {"id_type": id_type, "resolved_uuid": resolved_uuid, "organization_id": org_id, "organization_name": org_name}
+        payload_log_id = None
+        if resolved_uuid and id_type != "unknown":
+            payload_log_id = resolve_payload_log_id(logs_api, id_type, resolved_uuid, start, end)
+
+    return {
+        "id_type": id_type,
+        "resolved_uuid": resolved_uuid,
+        "organization_id": org_id,
+        "organization_name": org_name,
+        "payload_log_id": payload_log_id,
+    }
