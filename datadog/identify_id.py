@@ -96,15 +96,12 @@ def find_first_log(logs_api, query, start, end):
     return response.data[0] if response.data else None
 
 
-def resolve_payload_log_id(logs_api, id_type, resolved_uuid, start, end):
-    if id_type in ("request_id", "both"):
-        log = find_first_log(
-            logs_api,
-            f"@http.request.xrequestid:{resolved_uuid} service:bff",
-            start,
-            end,
-        )
-        return log.id if log else None
+def resolve_payload_xrequestid(logs_api, id_type, resolved_uuid, start, end):
+    # Only emit a TxPayload link when the user-supplied id is a transaction id —
+    # going from a tx to its originating request requires extra Datadog hops, so
+    # the link saves time. For request ids the user already has the xrequestid.
+    if id_type == "both":
+        return resolved_uuid
     if id_type == "transaction_id":
         org_log = find_first_log(
             logs_api,
@@ -114,16 +111,7 @@ def resolve_payload_log_id(logs_api, id_type, resolved_uuid, start, end):
         )
         if not org_log:
             return None
-        xreq = extract_full_uuid(org_log, "@http.request.xrequestid")
-        if not xreq:
-            return None
-        bff_log = find_first_log(
-            logs_api,
-            f"@http.request.xrequestid:{xreq} service:bff",
-            start,
-            end,
-        )
-        return bff_log.id if bff_log else None
+        return extract_full_uuid(org_log, "@http.request.xrequestid")
     return None
 
 
@@ -189,14 +177,14 @@ def identify_uuid(uuid):
         else:
             id_type = "unknown"
 
-        payload_log_id = None
+        payload_xrequestid = None
         if resolved_uuid and id_type != "unknown":
-            payload_log_id = resolve_payload_log_id(logs_api, id_type, resolved_uuid, start, end)
+            payload_xrequestid = resolve_payload_xrequestid(logs_api, id_type, resolved_uuid, start, end)
 
     return {
         "id_type": id_type,
         "resolved_uuid": resolved_uuid,
         "organization_id": org_id,
         "organization_name": org_name,
-        "payload_log_id": payload_log_id,
+        "payload_xrequestid": payload_xrequestid,
     }
