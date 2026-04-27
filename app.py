@@ -282,7 +282,7 @@ async def process_buffered_messages(message_key: str):
     # Classify UUIDs via Datadog
     transaction_ids = []
     request_ids = []
-    payload_log_ids = {}
+    payload_xrequestids = {}
     organization_id = None
     organization_name = None
     for uuid in uuids:
@@ -294,12 +294,12 @@ async def process_buffered_messages(message_key: str):
                 transaction_ids.append(display_uuid)
             if id_type in ("request_id", "both"):
                 request_ids.append(display_uuid)
-            if result.get("payload_log_id"):
-                payload_log_ids[display_uuid] = result["payload_log_id"]
+            if result.get("payload_xrequestid"):
+                payload_xrequestids[display_uuid] = result["payload_xrequestid"]
             if organization_id is None and result.get("organization_id"):
                 organization_id = result["organization_id"]
                 organization_name = result.get("organization_name")
-            logger.info(f"UUID classified | uuid={uuid} | resolved={display_uuid} | type={id_type} | org_id={result.get('organization_id')} | org_name={result.get('organization_name')} | payload_log_id={result.get('payload_log_id')}")
+            logger.info(f"UUID classified | uuid={uuid} | resolved={display_uuid} | type={id_type} | org_id={result.get('organization_id')} | org_name={result.get('organization_name')} | payload_xrequestid={result.get('payload_xrequestid')}")
         except Exception as e:
             logger.error(f"Datadog lookup failed for {uuid}: {str(e)}")
 
@@ -315,7 +315,7 @@ async def process_buffered_messages(message_key: str):
             username, combined_text, channel, thread_ts, slack_client,
             transaction_ids, request_ids, organization_id, organization_name,
             channel_name=channel_name,
-            payload_log_ids=payload_log_ids,
+            payload_xrequestids=payload_xrequestids,
         )
         logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
