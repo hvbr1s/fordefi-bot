@@ -14,14 +14,13 @@ from dotenv import load_dotenv
 from slack_sdk import WebClient
 from llm.ping_bot import ping_llm
 from collections import defaultdict
-from classes import ImageTooLargeError, BoundedOrderedSet
-#from thena.create_ticket import thena
 from typing import Any, Optional, List
 from datadog.identify_id import identify_uuid
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
 from slack_post.channel_cache import get_channel_name
 from fastapi import FastAPI, Request, Response
+from classes import ImageTooLargeError, BoundedOrderedSet
 
 load_dotenv()
 
@@ -320,14 +319,25 @@ async def process_buffered_messages(message_key: str):
         )
         logger.info(f"Customer query detected | Urgency: {urgency} | Channel: {channel}")
 
-        try:
-            post = slack_client.chat_postMessage(
-                channel=channel,
-                text=slack_post,
-                thread_ts=thread_ts
-            )
-            logger.info(f"Slack message posted | Channel: {channel} | Thread: {thread_ts}")
+        post = None
+        for attempt in range(2):
+            try:
+                response = slack_client.chat_postMessage(
+                    channel=channel,
+                    text=slack_post,
+                    thread_ts=thread_ts
+                )
+                if response.get("ok"):
+                    post = response
+                    logger.info(f"Slack message posted | Channel: {channel} | Thread: {thread_ts}")
+                    break
+                logger.warning(f"Slack post returned not-ok | attempt={attempt + 1} | Channel: {channel} | Error: {response.get('error')}")
+            except Exception as e:
+                logger.warning(f"Slack post raised | attempt={attempt + 1} | Channel: {channel} | Error: {str(e)}")
 
+        if post is None:
+            logger.error(f"Failed to post message after retry | Channel: {channel} | Thread: {thread_ts}")
+        else:
             try:
                 slack_client.reactions_add(
                     channel=channel,
@@ -336,9 +346,6 @@ async def process_buffered_messages(message_key: str):
                 )
             except Exception as e:
                 logger.error(f"Failed to add reaction | Channel: {channel} | Error: {str(e)}")
-
-        except Exception as e:
-            logger.error(f"Failed to post message | Channel: {channel} | Error: {str(e)}")
     else:
         logger.info(f"Not a customer query | Channel: {channel} | Summary: {summary}")
 
@@ -430,8 +437,6 @@ async def health_check():
 async def slack_events(request: Request):
     body_bytes = await request.body()
 
-    # Verify signature before parsing — a malformed body from an
-    # unauthenticated caller should get 403, not crash the JSON parser.
     if not signature_verifier.is_valid_request(body_bytes, request.headers):
         logger.warning("Invalid Slack signature")
         return Response(status_code=403)
