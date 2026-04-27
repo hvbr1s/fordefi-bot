@@ -22,3 +22,6 @@ data/
 # Claude
 CLAUDE.md
 .claude
+
+# Dead code
+bin/
