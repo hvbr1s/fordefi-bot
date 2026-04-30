@@ -100,8 +100,6 @@ RECENT_USERNAME_TTL = 60
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 SLACK_SIGNING_SECRET = os.getenv("SLACK_SIGNING_SECRET")
-THENA_AUTH_TOKEN = os.getenv("THENA_AUTH_TOKEN")
-ADMIN_AUTH_KEY = os.getenv("ADMIN_AUTH_KEY")
 
 slack_client = WebClient(token=SLACK_BOT_TOKEN)
 signature_verifier = SignatureVerifier(SLACK_SIGNING_SECRET)
