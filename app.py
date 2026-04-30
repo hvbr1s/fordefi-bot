@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from slack_sdk import WebClient
 from llm.ping_bot import ping_llm
 from collections import defaultdict
-from typing import Any, Optional, List
+from typing import Optional
 from datadog.identify_id import identify_uuid
 from slack_sdk.signature import SignatureVerifier
 from slack_post.enrich_post import enrich_bot_post
@@ -304,8 +304,6 @@ async def process_buffered_messages(message_key: str):
     # Accept "yes", "yes.", "yes, customer query", etc.
     if analysis.startswith("yes"):
         channel_name = pending[0].get('channel_name', '')
-        display_channel = channel_name.removeprefix('fordefi-') if channel_name else ''
-        log_request(urgency, summary, display_channel, transaction_ids, request_ids, organization_id)
         key_last_processed[message_key] = current_time
         thread_ts = event.get('thread_ts') if event.get('thread_ts') else event.get('ts')
 
@@ -393,39 +391,6 @@ def request_early_flush(message_key: str) -> None:
 def redact_emails(text: str) -> str:
     email_pattern = r"[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+"
     return re.sub(email_pattern, "redacted@email.com", text)
-
-def log_request(urgency: str, summary: str, channel_name: str, transaction_ids: Optional[List[str]] = None, request_ids: Optional[List[str]] = None, organization_id: Optional[str] = None, log_file: str = "/disk/data/request_logs.json"):
-    timestamp = datetime.now().isoformat(timespec="seconds")
-    log_entry: dict[str, Any] = {
-        "timestamp": timestamp,
-        "urgency": urgency,
-        "summary": summary,
-        "client": channel_name,
-        "platform": "telegram"
-    }
-    if transaction_ids:
-        log_entry["transaction_ids"] = transaction_ids
-    if request_ids:
-        log_entry["request_ids"] = request_ids
-    if organization_id:
-        log_entry["organization_id"] = organization_id
-
-    logs = []
-    if os.path.exists(log_file):
-        try:
-            with open(log_file, 'r') as f:
-                logs = json.load(f)
-        except json.JSONDecodeError:
-            logger.error(f"Corrupted log file at {log_file}, starting fresh")
-            logs = []
-
-    logs.append(log_entry)
-
-    try:
-        with open(log_file, 'w') as f:
-            json.dump(logs, f, indent=2)
-    except Exception as e:
-        logger.error(f"Failed to write to log file | Error: {str(e)}")
 
 @app.get("/_health")
 async def health_check():
